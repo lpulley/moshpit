@@ -1,0 +1,7 @@
+{
+  "extends": [
+      "eslint:recommended",
+      "google",
+      "plugin:node/recommended"
+  ]
+}
