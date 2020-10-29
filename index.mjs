@@ -22,6 +22,7 @@ import * as Commands from './commands.mjs';
 // Commands are indexed from lowercase names to functions
 const commands = {
   'ping': Commands.ping,
+  'whoami': Commands.whoami,
 };
 
 const client = new Discord.Client();
