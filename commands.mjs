@@ -6,34 +6,19 @@
  */
 
 /**
- * Replies with "pong!"
- * @param {Context} context
- */
-export async function ping(context) {
-  // Define a shortcut function to reply in the channel
-  const say = (content) => context.message.channel.send(content);
-
-  say('Pong!');
-}
-
-/**
  * Replies with the user's information from the database, if any.
  * @param {Context} context
  */
 export async function whoami(context) {
-  // Define a shortcut function to reply in the channel
-  const say = (content) => context.message.channel.send(content);
-  const pg = context.postgres;
-
-  const result = await pg.query(`
-      SELECT *
+  const result = await context.postgres.query(`
+      SELECT COUNT(*)
       FROM "MoshpitUser"
-      WHERE discord_user_id = '${context.message.member.user.id}';
+      WHERE discord_user_id = '${context.message.author.id}';
   `);
 
-  if (result.rows.length > 0) {
-    say('You are listed as a moshpit user!');
+  if (result.rows[0].count > 0) {
+    context.message.reply('You are listed as a moshpit user!');
   } else {
-    say('You are not listed as a moshpit user.');
+    context.message.reply('You are not listed as a moshpit user.');
   }
 }
