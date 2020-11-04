@@ -19,8 +19,12 @@ import * as Discord from 'discord.js';
 // Command actions are stored as functions in ./commands.mjs
 import * as Commands from './commands.mjs';
 
-// Commands are indexed from lowercase names to functions
-const commands = {
+// Commands that can be used in guilds
+const guildCommands = {
+  'whoami': Commands.whoami,
+};
+// Commands that can be used in DMs
+const privateCommands = {
   'whoami': Commands.whoami,
 };
 
@@ -33,7 +37,7 @@ client.on('ready', () => {
 // Handle incoming messages
 const prefixExpression = new RegExp(`^${prefix}(?:\\s+(.*))?$`, 'i');
 client.on('message', async (message) => {
-  const execute = async (command) => {
+  const execute = async (command, commands) => {
     const messageWords = command.split(/\s+/);
     if (messageWords[0]) {
       // If the message has a command after the prefix, perform the command
@@ -68,10 +72,10 @@ client.on('message', async (message) => {
     if (message.guild) {
       const match = message.content.match(prefixExpression);
       if (match) {
-        await execute(match[1] || '');
+        await execute(match[1] || '', guildCommands);
       }
     } else {
-      await execute(message.content);
+      await execute(message.content, privateCommands);
     }
   }
 });
