@@ -19,9 +19,13 @@ import * as Discord from 'discord.js';
 // Command actions are stored as functions in ./commands.mjs
 import * as Commands from './commands.mjs';
 
-// Commands are indexed from lowercase names to functions
-const commands = {
-  'ping': Commands.ping,
+// Commands that can be used in guilds
+const guildCommands = {
+  'whoami': Commands.whoami,
+};
+// Commands that can be used in DMs
+const privateCommands = {
+  'whoami': Commands.whoami,
 };
 
 const client = new Discord.Client();
@@ -31,33 +35,47 @@ client.on('ready', () => {
 });
 
 // Handle incoming messages
+const prefixExpression = new RegExp(`^${prefix}(?:\\s+(.*))?$`, 'i');
 client.on('message', async (message) => {
-  // Don't respond to anything that's not in a server
-  if (message.guild) {
-    // Don't respond to anything that doesn't have the bot's prefix
-    if (message.content.match(new RegExp(`^${prefix}(?:\\s+|$)`, 'i'))) {
-      const messageWords = message.content.split(/\s+/);
-      if (messageWords[1]) {
-        // If the message has a command after the prefix, perform the command
-        const messageCommand = messageWords[1].toLowerCase();
+  const execute = async (command, commands) => {
+    const messageWords = command.split(/\s+/);
+    if (messageWords[0]) {
+      // If the message has a command after the prefix, perform the command
+      const messageCommand = messageWords[0].toLowerCase();
+      if (messageCommand in commands) {
+        // Known command
         try {
           // Build a context object for the command to use
           const context = {
             message: message,
-            content: messageWords.slice(2),
+            content: messageWords.slice(1),
             postgres: postgres,
           };
           // Execute the command
           await commands[messageCommand](context);
         } catch (error) {
           // Catch and report any uncaught errors
-          message.channel.send('Whoops! Something went very wrong.');
+          message.reply('Whoops! Something went very wrong.');
           console.error(error);
         }
       } else {
-        // If there's no command, just say hi
-        message.channel.send('Hi!');
+        // Unknown command
+        message.reply('Unknown command.');
       }
+    } else {
+      // If there's no command, just say hi
+      message.reply('Hi!');
+    }
+  };
+
+  if (!message.author.bot) {
+    if (message.guild) {
+      const match = message.content.match(prefixExpression);
+      if (match) {
+        await execute(match[1] || '', guildCommands);
+      }
+    } else {
+      await execute(message.content, privateCommands);
     }
   }
 });
