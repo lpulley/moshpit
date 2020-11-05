@@ -42,7 +42,6 @@ export async function link(context) {
 
   if (result.rows.length > 0) {
     say('Success! Your Spotify tokens have been updated.');
-    console.log(result);
   } else {
     say('Fail :(');
   }
