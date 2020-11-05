@@ -26,7 +26,8 @@ const guildCommands = {
   'start': Commands.start,
   'quit': Commands.quit,
   'aq1': Commands.aq1,
-  'aq2': Commands.aq2
+  'aq2': Commands.aq2,
+  'data': Commands.data,
 };
 // Commands that can be used in DMs
 const privateCommands = {
