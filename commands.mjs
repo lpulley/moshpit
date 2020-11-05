@@ -66,7 +66,7 @@ export async function start(context) {
   await pg.query(`
       UPDATE "MoshpitUser"
       SET moshpit_id = '${result.rows[0].moshpit_id}'
-      WHERE discord_user_id = '${context.message.member.user.id}'
+      WHERE discord_user_id = '${context.message.member.user.id}';
   `);
 
   if (result.rows.length > 0) {
@@ -87,6 +87,12 @@ export async function quit(context) {
     WHERE owner_discord_id = '${context.message.member.user.id}'
       AND discord_channel_id = '${context.message.channel.id}'
     RETURNING *;
+  `);
+
+  await context.postgres.query(`
+      UPDATE "MoshpitUser"
+      SET moshpit_id = NULL
+      WHERE discord_user_id = '${context.message.member.user.id}';
   `);
 
   if (result.rowCount > 0) {
