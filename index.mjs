@@ -22,6 +22,8 @@ import * as Commands from './commands.mjs';
 // Commands that can be used in guilds
 const guildCommands = {
   'whoami': Commands.whoami,
+  'link': Commands.link,
+  'start': Commands.start
 };
 // Commands that can be used in DMs
 const privateCommands = {
