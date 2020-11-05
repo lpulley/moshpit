@@ -70,3 +70,63 @@ export async function start(context) {
     say('Fail :(');
   }
 }
+
+/**
+ * Removes moshpit.
+ * @param {Context} context
+ */
+export async function quit(context) {
+  // Define a shortcut function to reply in the channel
+  const result = await context.postgres.query(`
+    DELETE FROM "Moshpit"
+    WHERE owner_discord_id = '${context.message.member.user.id}' AND discord_channel_id = '${context.message.channel.id}'
+    RETURNING *;
+  `);
+
+  if (result.rowCount > 0) {
+    context.message.reply('moshpit has been deleted!');
+  } else {
+    context.message.reply('moshpit does not exist.');
+  }
+}
+
+/**
+ * Advanced Query 1: Count total users with expired Spotify tokens, grouped by the Discord Channel they are in.
+ * @param {Context} context
+ */
+export async function aq1(context) {
+  // Define a shortcut function to reply in the channel
+  const result = await context.postgres.query(`
+    SELECT m.discord_channel_id, COUNT(mu.discord_user_id)
+    FROM "Moshpit" m NATURAL JOIN "MoshpitUser" mu
+    WHERE mu.spotify_token_expiration < CURRENT_TIMESTAMP
+    GROUP BY m.discord_channel_id;
+  `);
+
+  if (result.rows.length > 0) {
+    context.message.reply(JSON.stringify(result.rows));
+  } else {
+    context.message.reply('No results found.');
+  }
+}
+
+/**
+ * Advanced Query 2: Count the number of moshpits that each user owns for users that own at least one.
+ * @param {Context} context
+ */
+export async function aq2(context) {
+  // Define a shortcut function to reply in the channel
+  const result = await context.postgres.query(`
+    SELECT mu.discord_user_id, COUNT(m.moshpit_id)
+    FROM "MoshpitUser" mu LEFT JOIN "Moshpit" m ON mu.discord_user_id = m.owner_discord_id
+    GROUP BY mu.discord_user_id
+    HAVING COUNT(m.moshpit_id) >= 1
+    ORDER BY COUNT(m.moshpit_id) DESC;
+  `);
+
+  if (result.rows.length > 0) {
+    context.message.reply(JSON.stringify(result.rows));
+  } else {
+    context.message.reply('No results found.');
+  }
+}
