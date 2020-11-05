@@ -23,7 +23,10 @@ import * as Commands from './commands.mjs';
 const guildCommands = {
   'whoami': Commands.whoami,
   'link': Commands.link,
-  'start': Commands.start
+  'start': Commands.start,
+  'quit': Commands.quit,
+  'aq1': Commands.aq1,
+  'aq2': Commands.aq2
 };
 // Commands that can be used in DMs
 const privateCommands = {
