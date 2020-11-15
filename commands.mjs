@@ -52,42 +52,24 @@ export async function link(context) {
 }
 
 /**
- * Replies with nothing useful.
- * @param {Context} context The context from which this command was called
- */
-export async function link(context) {
-  // Define a shortcut function to reply in the channel
-  const say = (content) => context.message.channel.send(content);
-  const pg = context.postgres;
-
-  const result = await pg.query(`
-      UPDATE "MoshpitUser"
-      SET spotify_access_token = 'ACCESS_TOKEN_HERE',
-        spotify_refresh_token = 'REFRESH_TOKEN_HERE'
-      WHERE discord_user_id = '${context.message.member.user.id}'
-      RETURNING *;
-  `);
-
-  if (result.rows.length > 0) {
-    say('Success! Your Spotify tokens have been updated.');
-  } else {
-    say('Fail :(');
-  }
-}
-
-/**
  * Creates a moshpit and adds the user to it
  * @param {Context} context The context from which this command was called
  */
 export async function start(context) {
-  // Define a shortcut function to reply in the channel
-  const say = (content) => context.message.channel.send(content);
+  const reply = (content) => context.message.reply(content);
   const pg = context.postgres;
 
   const result = await pg.query(`
-      INSERT INTO "Moshpit" (discord_channel_id, owner_discord_id, join_secret)
-      VALUES ('${context.message.channel.id}',
-        '${context.message.member.user.id}', 'fake secret :)')
+      INSERT INTO "Moshpit" (
+        discord_channel_id,
+        owner_discord_id,
+        join_secret
+      )
+      VALUES (
+        '${context.message.channel.id}',
+        '${context.message.member.user.id}',
+        'fake secret :)'
+      )
       RETURNING *;
   `);
 
@@ -97,10 +79,10 @@ export async function start(context) {
       WHERE discord_user_id = '${context.message.member.user.id}';
   `);
 
-  if (result.rows.length > 0) {
-    say('Success! Moshpit #' + result.rows[0].moshpit_id + ' created.');
+  if (result.rowCount > 0) {
+    await reply(`success! Moshpit #${result.rows[0].moshpit_id} created.`);
   } else {
-    say('Fail :(');
+    await reply('fail :(');
   }
 }
 
@@ -109,12 +91,13 @@ export async function start(context) {
  * @param {Context} context
  */
 export async function quit(context) {
-  // Define a shortcut function to reply in the channel
+  const reply = (content) => context.message.reply(content);
+
   const result = await context.postgres.query(`
-    DELETE FROM "Moshpit"
-    WHERE owner_discord_id = '${context.message.member.user.id}'
-      AND discord_channel_id = '${context.message.channel.id}'
-    RETURNING *;
+      DELETE FROM "Moshpit"
+      WHERE owner_discord_id = '${context.message.member.user.id}'
+        AND discord_channel_id = '${context.message.channel.id}'
+      RETURNING *;
   `);
 
   await context.postgres.query(`
@@ -124,10 +107,9 @@ export async function quit(context) {
   `);
 
   if (result.rowCount > 0) {
-    context.message.reply('Success! Moshpit #' +
-    result.rows[0].moshpit_id + ' deleted.');
+    await reply(`success! Moshpit #${result.rows[0].moshpit_id} deleted.`);
   } else {
-    context.message.reply('Fail! Moshpit does not exist.');
+    await reply('fail! Moshpit does not exist.');
   }
 }
 
@@ -136,18 +118,19 @@ export async function quit(context) {
  * @param {Context} context
  */
 export async function data(context) {
-  // Define a shortcut function to reply in the channel
+  const reply = (content) => context.message.reply(content);
+
   const result = await context.postgres.query(`
-    SELECT moshpit_id, discord_channel_id, owner_discord_id
-    FROM "Moshpit"
-    WHERE owner_discord_id = '${context.message.member.user.id}'
-      AND discord_channel_id = '${context.message.channel.id}';
+      SELECT moshpit_id, discord_channel_id, owner_discord_id
+      FROM "Moshpit"
+      WHERE owner_discord_id = '${context.message.member.user.id}'
+        AND discord_channel_id = '${context.message.channel.id}';
   `);
 
   if (result.rowCount > 0) {
-    context.message.reply(JSON.stringify(result.rows));
+    await reply(`\`${JSON.stringify(result.rows)}\``);
   } else {
-    context.message.reply('No results found.');
+    await reply('no results found.');
   }
 }
 
@@ -157,18 +140,19 @@ export async function data(context) {
  * @param {Context} context
  */
 export async function aq1(context) {
-  // Define a shortcut function to reply in the channel
+  const reply = (content) => context.message.reply(content);
+
   const result = await context.postgres.query(`
-    SELECT m.discord_channel_id, COUNT(mu.discord_user_id)
-    FROM "Moshpit" m NATURAL JOIN "MoshpitUser" mu
-    WHERE mu.spotify_token_expiration < CURRENT_TIMESTAMP
-    GROUP BY m.discord_channel_id;
+      SELECT m.discord_channel_id, COUNT(mu.discord_user_id)
+      FROM "Moshpit" m NATURAL JOIN "MoshpitUser" mu
+      WHERE mu.spotify_token_expiration < CURRENT_TIMESTAMP
+      GROUP BY m.discord_channel_id;
   `);
 
-  if (result.rows.length > 0) {
-    context.message.reply(JSON.stringify(result.rows));
+  if (result.rowCount > 0) {
+    await reply(`\`${JSON.stringify(result.rows)}\``);
   } else {
-    context.message.reply('No results found.');
+    await reply('no results found.');
   }
 }
 
@@ -178,19 +162,20 @@ export async function aq1(context) {
  * @param {Context} context
  */
 export async function aq2(context) {
-  // Define a shortcut function to reply in the channel
+  const reply = (content) => context.message.reply(content);
+
   const result = await context.postgres.query(`
-    SELECT mu.discord_user_id, COUNT(m.moshpit_id)
-    FROM "MoshpitUser" mu LEFT JOIN "Moshpit" m
-      ON mu.discord_user_id = m.owner_discord_id
-    GROUP BY mu.discord_user_id
-    HAVING COUNT(m.moshpit_id) >= 1
-    ORDER BY COUNT(m.moshpit_id) DESC;
+      SELECT mu.discord_user_id, COUNT(m.moshpit_id)
+      FROM "MoshpitUser" mu LEFT JOIN "Moshpit" m
+        ON mu.discord_user_id = m.owner_discord_id
+      GROUP BY mu.discord_user_id
+      HAVING COUNT(m.moshpit_id) >= 1
+      ORDER BY COUNT(m.moshpit_id) DESC;
   `);
 
-  if (result.rows.length > 0) {
-    context.message.reply(JSON.stringify(result.rows));
+  if (result.rowCount > 0) {
+    await reply(`\`${JSON.stringify(result.rows)}\``);
   } else {
-    context.message.reply('No results found.');
+    await reply('no results found.');
   }
 }
