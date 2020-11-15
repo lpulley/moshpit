@@ -1,3 +1,6 @@
+import axios from 'axios';
+import * as Utilities from './utilities.mjs';
+
 /**
  * @typedef {Object} Context
  * @property {import('discord.js').Message} message
@@ -11,14 +14,39 @@
  */
 export async function whoami(context) {
   const result = await context.postgres.query(`
-      SELECT COUNT(*)
-      FROM "MoshpitUser"
-      WHERE discord_user_id = '${context.message.author.id}';
+      select count(*) as count
+      from "MoshpitUser"
+      where discord_user_id = '${context.message.author.id}';
   `);
 
   if (result.rows[0].count > 0) {
-    context.message.reply('You are listed as a moshpit user!');
+    await context.message.reply('you are listed as a moshpit user!');
   } else {
-    context.message.reply('You are not listed as a moshpit user.');
+    await context.message.reply('you are not listed as a moshpit user.');
+  }
+}
+
+/**
+ * Links a Spotify account to a Discord user.
+ * Adds the Spotify user ID and necessary auth material to the database.
+ * @param {Context} context
+ */
+export async function link(context) {
+  const reply = (content) => context.message.reply(content);
+
+  const spotifyAccessToken = await Utilities.getUserSpotifyToken(
+      context.message.author,
+      context.postgres,
+  );
+
+  if (spotifyAccessToken) {
+    const profileResponse = await axios.get(
+        'https://api.spotify.com/v1/me',
+        {headers: {'Authorization': `Bearer ${spotifyAccessToken}`}},
+    );
+    const username = profileResponse.data.display_name;
+    await reply(`you are linked to the Spotify account \`${username}\`.`);
+  } else {
+    await reply('your Spotify account isn\'t connected.');
   }
 }

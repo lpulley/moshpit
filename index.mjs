@@ -22,10 +22,7 @@ import * as Commands from './commands.mjs';
 // Commands that can be used in guilds
 const guildCommands = {
   'whoami': Commands.whoami,
-};
-// Commands that can be used in DMs
-const privateCommands = {
-  'whoami': Commands.whoami,
+  'link': Commands.link,
 };
 
 const client = new Discord.Client();
@@ -55,27 +52,23 @@ client.on('message', async (message) => {
           await commands[messageCommand](context);
         } catch (error) {
           // Catch and report any uncaught errors
-          message.reply('Whoops! Something went very wrong.');
+          await message.reply('whoops! Something went very wrong.');
           console.error(error);
         }
       } else {
         // Unknown command
-        message.reply('Unknown command.');
+        await message.reply('that\'s an unknown command.');
       }
     } else {
       // If there's no command, just say hi
-      message.reply('Hi!');
+      await message.reply('hi!');
     }
   };
 
-  if (!message.author.bot) {
-    if (message.guild) {
-      const match = message.content.match(prefixExpression);
-      if (match) {
-        await execute(match[1] || '', guildCommands);
-      }
-    } else {
-      await execute(message.content, privateCommands);
+  if (!message.author.bot && message.guild) {
+    const match = message.content.match(prefixExpression);
+    if (match) {
+      await execute(match[1] || '', guildCommands);
     }
   }
 });
