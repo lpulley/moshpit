@@ -49,7 +49,7 @@ export async function getConfirmation(channel, user, text) {
  * @param {Pool} postgres The Postgres pool to use
  * @return {?string} The Spotify access token for the given user
  */
-export async function getUserSpotifyToken(user, postgres) {
+export async function getSpotifyAccessToken(user, postgres) {
   // Check the database for an existing token set
   const dbTokenResponse = await postgres.query(`
       select

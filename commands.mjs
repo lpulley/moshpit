@@ -34,7 +34,7 @@ export async function whoami(context) {
 export async function link(context) {
   const reply = (content) => context.message.reply(content);
 
-  const spotifyAccessToken = await Utilities.getUserSpotifyToken(
+  const spotifyAccessToken = await Utilities.getSpotifyAccessToken(
       context.message.author,
       context.postgres,
   );
