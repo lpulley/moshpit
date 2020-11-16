@@ -22,7 +22,7 @@ app.get(process.env['SPOTIFY_CALLBACK_PATH'], (request, response) => {
         resolve(request.query.code);
       }
     } else {
-      console.log(
+      console.warn(
           'Received unexpected Spotify callback for state',
           request.query.state,
       );
@@ -52,5 +52,5 @@ export async function getSpotifyAuthCode(state, timeout) {
 }
 
 app.listen(process.env['CALLBACK_PORT'], () => {
-  console.log('Listening for callbacks.');
+  console.info('Listening for callbacks.');
 });

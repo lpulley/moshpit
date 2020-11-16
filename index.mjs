@@ -33,7 +33,7 @@ const guildCommands = {
 const client = new Discord.Client();
 client.on('ready', () => {
   // Send a log message on successful login to Discord
-  console.log(`Logged in as "${client.user.tag}"`);
+  console.info(`Logged in as "${client.user.tag}"`);
 });
 
 // Handle incoming messages
