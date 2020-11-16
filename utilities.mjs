@@ -73,7 +73,7 @@ export async function getSpotifyAccessToken(user, postgres) {
 
     if (Date.now() < expiration) {
       // The existing access is still valid; just return it
-      console.debug(`Reusing Spotify access token for user ${user}`);
+      console.verbose(`Reusing Spotify access token for user ${user}`);
       return accessToken;
     } else {
       // The existing access token is expired; refresh it
@@ -112,7 +112,7 @@ export async function getSpotifyAccessToken(user, postgres) {
     }
   } else {
     // There is no existing token set; begin a new auth flow
-    console.debug(`Performing Spotify auth flow for user ${user}`);
+    console.verbose(`Performing Spotify auth flow for user ${user}`);
 
     const dm = await user.createDM();
     dm.send('Looks like you haven\'t connected Spotify yet!');
@@ -142,7 +142,7 @@ export async function getSpotifyAccessToken(user, postgres) {
     try {
       // Get the authorization code for this user
       const authCode = await Callback.getSpotifyAuthCode(authCodeState, 60000);
-      console.debug(`Received Spotify auth code for user ${user}`);
+      console.verbose(`Received Spotify auth code for user ${user}`);
 
       // Exchange the authorization code for access and refresh tokens
       const authResponse = await axios.post(
@@ -155,7 +155,7 @@ export async function getSpotifyAccessToken(user, postgres) {
             'redirect_uri': SPOTIFY_REDIRECT_URI,
           }),
       );
-      console.debug(`Received Spotify token set for user ${user}`);
+      console.verbose(`Received Spotify token set for user ${user}`);
 
       // Save the tokens and expiration timestamp in the database
       const expiration =
