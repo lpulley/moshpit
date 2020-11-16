@@ -38,11 +38,11 @@ app.get(process.env['SPOTIFY_CALLBACK_PATH'], (request, response) => {
 /**
  * Returns a Spotify auth code for a state if it arrives within the timeout.
  * @param {string} state The state query parameter to filter for
- * @param {number} [timeout=60000] The number of milliseconds to wait before
- * timing out
+ * @param {number} [timeout] The number of milliseconds to wait before timing
+ * out
  * @return {Promise<string>} The Spotify authorization code
  */
-export async function getSpotifyAuthCode(state, timeout = 60000) {
+export async function getSpotifyAuthCode(state, timeout) {
   return new Promise((resolve, reject) => {
     states[state] = [resolve, reject];
     setTimeout(() => {

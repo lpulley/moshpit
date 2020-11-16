@@ -42,12 +42,14 @@ export async function getConfirmation(channel, user, text) {
 }
 
 /**
- * Generates/retrieves (and potentially refreshes) a Discord user's Spotify auth
- * token.
+ * Generates/retrieves (and potentially refreshes) a Discord user's Spotify
+ * access token using Spotify's authorization code flow.
  * https://developer.spotify.com/documentation/general/guides/authorization-guide/#authorization-code-flow
  * @param {DiscordUser} user The Discord user whose token is needed
- * @param {Pool} postgres The Postgres pool to use
- * @return {?string} The Spotify access token for the given user
+ * @param {Pool} postgres The Postgres pool to use for retrieving or updating
+ * the user's token set
+ * @return {?string} The Spotify access token for the given user, or null if
+ * none was able to be procured
  */
 export async function getSpotifyAccessToken(user, postgres) {
   // Check the database for an existing token set
@@ -134,12 +136,12 @@ export async function getSpotifyAccessToken(user, postgres) {
     codeUrl.searchParams.set('state', authCodeState);
 
     // Send the user a link to click to begin the auth flow
-    await dm.send(`Click this link to authorize moshpit to use your Spotify ` +
-                  `account:\n${codeUrl}`);
+    await dm.send(`Please click this link and authorize moshpit to use your ` +
+                  `Spotify account within one minute to continue:\n${codeUrl}`);
 
     try {
       // Get the authorization code for this user
-      const authCode = await Callback.getSpotifyAuthCode(authCodeState);
+      const authCode = await Callback.getSpotifyAuthCode(authCodeState, 60000);
       console.debug(`Received Spotify auth code for user ${user}`);
 
       // Exchange the authorization code for access and refresh tokens
