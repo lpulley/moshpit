@@ -4,5 +4,8 @@
     "editor.detectIndentation": false,
     "[javascript]": {
       "editor.rulers": [80]
+    },
+    "[markdown]": {
+      "editor.rulers": [100]
     }
 }
