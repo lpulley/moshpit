@@ -21,7 +21,6 @@ import * as Commands from './commands.mjs';
 
 // Commands that can be used in guilds
 const guildCommands = {
-  'whoami': Commands.whoami,
   'link': Commands.link,
   'start': Commands.start,
   'quit': Commands.quit,
