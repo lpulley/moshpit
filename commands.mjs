@@ -1,4 +1,4 @@
-import axios from 'axios';
+import Spotify from 'spotify-web-api-node';
 import * as Utilities from './utilities.mjs';
 
 /**
@@ -9,24 +9,30 @@ import * as Utilities from './utilities.mjs';
  */
 
 /**
+ * Gets a Spotify Web API instance for the user and database from the context.
+ * @param {Context} context
+ * @return {Promise<?Spotify>}
+ */
+async function getSpotify(context) {
+  const accessToken = await Utilities.getSpotifyAccessToken(
+      context.message.author,
+      context.postgres,
+  );
+  return accessToken ? new Spotify({accessToken: accessToken}) : null;
+}
+
+/**
  * Links a Spotify account to a Discord user.
  * Adds the Spotify user ID and necessary auth material to the database.
  * @param {Context} context
  */
 export async function link(context) {
   const reply = (content) => context.message.reply(content);
+  const spotify = await getSpotify(context);
 
-  const spotifyAccessToken = await Utilities.getSpotifyAccessToken(
-      context.message.author,
-      context.postgres,
-  );
-
-  if (spotifyAccessToken) {
-    const profileResponse = await axios.get(
-        'https://api.spotify.com/v1/me',
-        {headers: {'Authorization': `Bearer ${spotifyAccessToken}`}},
-    );
-    const username = profileResponse.data.display_name;
+  if (spotify) {
+    const profileResponse = await spotify.getMe();
+    const username = profileResponse.body.id;
     await reply(`you are linked to the Spotify account \`${username}\`.`);
   } else {
     await reply('your Spotify account isn\'t connected.');
@@ -39,33 +45,61 @@ export async function link(context) {
  */
 export async function start(context) {
   const reply = (content) => context.message.reply(content);
-  const pg = context.postgres;
+  const spotify = await getSpotify(context);
 
-  const result = await pg.query(`
-      INSERT INTO "Moshpit" (
-        discord_channel_id,
-        owner_discord_id,
-        join_secret
-      )
-      VALUES (
-        '${context.message.channel.id}',
-        '${context.message.member.user.id}',
-        'fake secret :)'
-      )
-      RETURNING *;
-  `);
-
-  await pg.query(`
-      UPDATE "MoshpitUser"
-      SET moshpit_id = '${result.rows[0].moshpit_id}'
-      WHERE discord_user_id = '${context.message.member.user.id}';
-  `);
-
-  if (result.rowCount > 0) {
-    await reply(`success! Moshpit #${result.rows[0].moshpit_id} created.`);
-  } else {
-    await reply('fail :(');
+  if (!spotify) {
+    await reply('you need to be signed in to Spotify.');
+    return;
   }
+
+  const oldMoshpitResults = await context.postgres.query(`
+      select moshpit_id, spotify_playlist_id
+      from "Moshpit"
+      where discord_guild_id = '${context.message.guild.id}'
+        and owner_discord_id = '${context.message.author.id}';
+  `);
+  let moshpit = oldMoshpitResults.rows[0];
+
+  // If there isn't already a moshpit for this user in this guild, make one
+  if (!moshpit) {
+    // Create a Spotify playlist
+    const playlistResponse = await spotify.createPlaylist(
+        `${context.message.guild.name} moshpit`,
+        {
+          'public': true,
+          'description': `A moshpit auto-generated playlist`,
+        },
+    );
+    const playlist = playlistResponse.body;
+
+    // Create a moshpit in the database
+    const newMoshpitResults = await context.postgres.query(`
+        insert into "Moshpit" (
+          spotify_playlist_id,
+          discord_guild_id,
+          owner_discord_id,
+          join_secret
+        )
+        values (
+          '${playlist.id}',
+          '${context.message.guild.id}',
+          '${context.message.author.id}',
+          ''
+        )
+        returning moshpit_id, spotify_playlist_id;
+    `);
+
+    moshpit = newMoshpitResults.rows[0];
+  }
+
+  // Update the owner's current moshpit to this one
+  await context.postgres.query(`
+      update "MoshpitUser"
+      set moshpit_id = '${moshpit.moshpit_id}'
+      where discord_user_id = '${context.message.author.id}';
+  `);
+
+  await reply(`success! Moshpit #${moshpit.moshpit_id} started.`);
 }
 
 /**
