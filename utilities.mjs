@@ -6,6 +6,7 @@ import * as Callback from './callback.mjs';
 /**
  * @typedef {import('discord.js').User} DiscordUser
  * @typedef {import('discord.js').TextChannel} DiscordTextChannel
+ * @typedef {import('discord.js').EmojiResolvable} DiscordEmojiResolvable
  * @typedef {import('pg').Pool} Pool
  */
 
@@ -39,6 +40,52 @@ export async function getConfirmation(channel, user, text) {
 
   await message.delete();
   return collected.first().emoji.name === '✅';
+}
+
+/**
+ * Prompts any or all users to react. Finishes on timeout or when the leader (if
+ * any) reacts.
+ * @param {DiscordTextChannel} channel The channel where the message should be
+ * sent
+ * @param {DiscordUser} leader The user whose response will end the collection
+ * @param {string} text The text that should be the content of the message
+ * @param {DiscordEmojiResolvable} emoji The reaction emoji to use
+ * @return {Promise<[DiscordUser]>} The users who reacted, possibly including
+ * the leader (if it didn't time out)
+ */
+export async function collectJoins(channel, leader, text, emoji) {
+  const message = await channel.send(text);
+
+  const collector = message.createReactionCollector(
+      (reaction, user) =>
+        reaction.emoji.toString() === emoji.toString() && !user.bot,
+      {time: 10000},
+  );
+  const joins = [];
+
+  // Construct a promise representing the results of the collection
+  const result = new Promise((resolve) => {
+    // Resolve with an array of all Discord users when the collector ends
+    collector.on('end', async () => {
+      await message.delete();
+      resolve(joins);
+    });
+  });
+
+  // End the collector when the leader reacts
+  collector.on('collect', (_reaction, user) => {
+    if (user === leader) {
+      // Don't include the leader
+      collector.stop();
+    } else {
+      joins.push(user);
+    }
+  });
+
+  // Add the initial reaction
+  await message.react(emoji);
+
+  return result;
 }
 
 /**
@@ -104,8 +151,7 @@ export async function getSpotifyAccessToken(user, postgres) {
         return refreshResponse.data.access_token;
       } catch (error) {
         console.info(`Failed to refresh Spotify for Discord user ${user}`);
-        const dm = await user.createDM();
-        await dm.send('Failed to refresh your Spotify account connection. ' +
+        await user.send('Failed to refresh your Spotify account connection. ' +
                       'Try again or contact a developer.');
         return null;
       }

@@ -9,13 +9,18 @@ import * as Utilities from './utilities.mjs';
  */
 
 /**
+ * @typedef {import('discord.js').User} DiscordUser
+ */
+
+/**
  * Gets a Spotify Web API instance for the user and database from the context.
  * @param {Context} context
+ * @param {?DiscordUser} user
  * @return {Promise<?Spotify>}
  */
-async function getSpotify(context) {
+async function getSpotify(context, user) {
   const accessToken = await Utilities.getSpotifyAccessToken(
-      context.message.author,
+      user || context.message.author,
       context.postgres,
   );
   return accessToken ? new Spotify({accessToken: accessToken}) : null;
@@ -45,25 +50,25 @@ export async function link(context) {
  */
 export async function start(context) {
   const reply = (content) => context.message.reply(content);
-  const spotify = await getSpotify(context);
-
-  if (!spotify) {
-    await reply('you need to be signed in to Spotify.');
-    return;
-  }
+  const owner = context.message.author;
 
   const oldMoshpitResults = await context.postgres.query(`
       select moshpit_id, spotify_playlist_id
       from "Moshpit"
       where discord_guild_id = '${context.message.guild.id}'
-        and owner_discord_id = '${context.message.author.id}';
+        and owner_discord_id = '${owner.id}';
   `);
   let moshpit = oldMoshpitResults.rows[0];
 
   // If there isn't already a moshpit for this user in this guild, make one
   if (!moshpit) {
     // Create a Spotify playlist
-    const playlistResponse = await spotify.createPlaylist(
+    const ownerSpotify = await getSpotify(context, owner);
+    if (!ownerSpotify) {
+      await reply('you need to be signed in to Spotify.');
+      return;
+    }
+    const playlistResponse = await ownerSpotify.createPlaylist(
         `${context.message.guild.name} moshpit`,
         {
           'public': true,
@@ -83,7 +88,7 @@ export async function start(context) {
         values (
           '${playlist.id}',
           '${context.message.guild.id}',
-          '${context.message.author.id}',
+          '${owner.id}',
           ''
         )
         returning moshpit_id, spotify_playlist_id;
@@ -96,10 +101,38 @@ export async function start(context) {
   await context.postgres.query(`
       update "MoshpitUser"
       set moshpit_id = '${moshpit.moshpit_id}'
-      where discord_user_id = '${context.message.author.id}';
+      where discord_user_id = '${owner.id}';
   `);
 
-  await reply(`success! Moshpit #${moshpit.moshpit_id} started.`);
+  await reply(`great! Let's get everyone else on board.`);
+
+  const listeners = await Utilities.collectJoins(
+      context.message.channel,
+      owner,
+      `React to join <@${owner.id}>'s moshpit!`,
+      '🖐️',
+  );
+
+  // TODO: Populate the playlist with a few recommendations
+
+  await Promise.all([owner, ...listeners].map(async (listener) => {
+    const listenerSpotify = await getSpotify(context, listener);
+    // TODO: Can we force the users to open sessions before trying to play?
+
+    // Return each promise to Promise.all instead of await-ing so that they can
+    // run in parallel
+    await listenerSpotify.setShuffle({state: false});
+    return listenerSpotify.play({
+      context_uri: `spotify:playlist:${moshpit.spotify_playlist_id}`,
+      offset: {position: 0}, // Start at the first track in the playlist
+    }).catch(() => {
+      listener.send('Something went wrong while joining the moshpit. Make ' +
+                    'sure you have an active Spotify session! You may need ' +
+                    'to start playback first.');
+    });
+  }));
+
+  await context.message.channel.send('Started the moshpit!');
 }
 
 /**
