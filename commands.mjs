@@ -51,6 +51,11 @@ export async function link(context) {
 export async function start(context) {
   const reply = (content) => context.message.reply(content);
   const owner = context.message.author;
+  const ownerSpotify = await getSpotify(context, owner);
+  if (!ownerSpotify) {
+    await reply('you need to be signed in to Spotify.');
+    return;
+  }
 
   const oldMoshpitResults = await context.postgres.query(`
       select moshpit_id, spotify_playlist_id
@@ -63,11 +68,6 @@ export async function start(context) {
   // If there isn't already a moshpit for this user in this guild, make one
   if (!moshpit) {
     // Create a Spotify playlist
-    const ownerSpotify = await getSpotify(context, owner);
-    if (!ownerSpotify) {
-      await reply('you need to be signed in to Spotify.');
-      return;
-    }
     const playlistResponse = await ownerSpotify.createPlaylist(
         `${context.message.guild.name} moshpit`,
         {
@@ -113,15 +113,46 @@ export async function start(context) {
       '🖐️',
   );
 
-  // TODO: Populate the playlist with a few recommendations
+  // Get each user's top 50 artists' IDs as seed candidates
+  const artistCandidates = await Promise.all(
+      [owner, ...listeners].map(async (user) => {
+        const userSpotify = await getSpotify(context, user);
+        const response = await userSpotify.getMyTopArtists({limit: 50});
+        const ids = response.body.items.map((item) => item.id);
+        return ids;
+      }),
+  );
 
+  console.debug(artistCandidates);
+
+  const trackIDs = Array(5).map(async () => {
+    // Choose 5 artist IDs from these candidates at random to be the seeds
+    const artists = Array(5).map(async () =>
+      artistCandidates[Math.floor(Math.random() * artistCandidates.length)]);
+    // Return a recommended track ID
+    return ownerSpotify.getRecommendations({
+      seed_artists: artists,
+      limit: 1,
+    }).body.tracks[0].id;
+  });
+
+  console.debug(trackIDs);
+
+  // Populate the playlist with initial tracks
+  await ownerSpotify.addTracksToPlaylist(
+      moshpit.spotify_playlist_id,
+      trackIDs.map((id) => `spotify:track:${id}`),
+      {position: 0},
+  );
+
+  // Start playing the playlist
   await Promise.all([owner, ...listeners].map(async (listener) => {
     const listenerSpotify = await getSpotify(context, listener);
     // TODO: Can we force the users to open sessions before trying to play?
 
     // Return each promise to Promise.all instead of await-ing so that they can
     // run in parallel
-    await listenerSpotify.setShuffle({state: false});
+    await listenerSpotify.setShuffle(false);
     return listenerSpotify.play({
       context_uri: `spotify:playlist:${moshpit.spotify_playlist_id}`,
       offset: {position: 0}, // Start at the first track in the playlist
