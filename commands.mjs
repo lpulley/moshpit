@@ -1,4 +1,4 @@
-import axios from 'axios';
+import SpotifyWebApi from 'spotify-web-api-node';
 import * as Utilities from './utilities.mjs';
 
 /**
@@ -16,18 +16,13 @@ import * as Utilities from './utilities.mjs';
 export async function link(context) {
   const reply = (content) => context.message.reply(content);
 
-  const spotifyAccessToken = await Utilities.getSpotifyAccessToken(
+  const {userId: spotifyUserId} = await Utilities.getSpotifyAuth(
       context.message.author,
       context.postgres,
   );
 
-  if (spotifyAccessToken) {
-    const profileResponse = await axios.get(
-        'https://api.spotify.com/v1/me',
-        {headers: {'Authorization': `Bearer ${spotifyAccessToken}`}},
-    );
-    const username = profileResponse.data.display_name;
-    await reply(`you are linked to the Spotify account \`${username}\`.`);
+  if (spotifyUserId) {
+    await reply(`you are linked to the Spotify account \`${spotifyUserId}\`.`);
   } else {
     await reply('your Spotify account isn\'t connected.');
   }
@@ -39,32 +34,83 @@ export async function link(context) {
  */
 export async function start(context) {
   const reply = (content) => context.message.reply(content);
-  const pg = context.postgres;
 
-  const result = await pg.query(`
-      INSERT INTO "Moshpit" (
-        discord_channel_id,
-        owner_discord_id,
-        join_secret
-      )
-      VALUES (
-        '${context.message.channel.id}',
-        '${context.message.member.user.id}',
-        'fake secret :)'
-      )
-      RETURNING *;
-  `);
+  const {
+    userId: spotifyUserId,
+    accessToken: spotifyAccessToken,
+  } = await Utilities.getSpotifyAuth(
+      context.message.author,
+      context.postgres,
+  );
 
-  await pg.query(`
-      UPDATE "MoshpitUser"
-      SET moshpit_id = '${result.rows[0].moshpit_id}'
-      WHERE discord_user_id = '${context.message.member.user.id}';
-  `);
+  if (!spotifyUserId || !spotifyAccessToken) {
+    reply('you can\'t use this feature without a connected Spotify account.');
+    return;
+  }
 
-  if (result.rowCount > 0) {
-    await reply(`success! Moshpit #${result.rows[0].moshpit_id} created.`);
-  } else {
-    await reply('fail :(');
+  const spotifyApi = new SpotifyWebApi({accessToken: spotifyAccessToken});
+
+  try {
+    const oldMoshpitResult = await context.postgres.query(`
+        select moshpit_id, spotify_playlist_id
+        from "Moshpit"
+        where discord_channel_id = '${context.message.channel.id}'
+          and owner_discord_id = '${context.message.author.id}'
+        order by moshpit_id desc;
+    `);
+
+    let moshpitId = null;
+    let playlistId = null;
+
+    if (oldMoshpitResult.rowCount > 0) {
+      // This user has an existing moshpit in this channel
+      moshpitId = oldMoshpitResult.rows[0].moshpit_id;
+      playlistId = oldMoshpitResult.rows[0].spotify_playlist_id;
+    } else {
+      // We need to create a new moshpit for this user in this channel
+
+      // Create a playlist for this moshpit in Spotify
+      const playlistResponse = await spotifyApi.createPlaylist(
+          `${context.message.guild.name} ${context.message.channel.name}`,
+          {description: 'A moshpit auto-generated playlist'},
+      );
+
+      // Create a new moshpit in the database
+      const newMoshpitResult = await context.postgres.query(`
+          insert into "Moshpit" (
+            discord_channel_id,
+            owner_discord_id,
+            join_secret,
+            spotify_playlist_id
+          )
+          values (
+            '${context.message.channel.id}',
+            '${context.message.member.user.id}',
+            '',
+            '${playlistResponse.body.id}'
+          )
+          returning moshpit_id;
+      `);
+
+      moshpitId = newMoshpitResult.rows[0].moshpit_id;
+      playlistId = playlistResponse.body.id;
+    }
+
+    // Update the owner's current moshpit
+    await context.postgres.query(`
+        update "MoshpitUser"
+        set moshpit_id = '${moshpitId}'
+        where discord_user_id = '${context.message.author.id}';
+    `);
+
+    // Simply send a link to the playlist
+    // TODO: Start an activity that people can join
+    await context.message.channel.send(
+        `https://open.spotify.com/playlist/${playlistId}`,
+    );
+  } catch (error) {
+    console.error(error);
+    await reply('something went wrong creating your moshpit.');
   }
 }
 
