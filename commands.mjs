@@ -177,6 +177,7 @@ export async function start(context) {
             '${features.valence}'
           );
       `);
+      await Neo4j.addTrack(context, '${moshpit.moshpit_id}', '${uri}');
     }
 
     // Populate the playlist and update the length

@@ -73,11 +73,11 @@ export async function sqlToNeo4j(context) {
  * Adds track to database.
  * @param {Context} context
  */
-export async function addTrack(context) {
+export async function addTrack(context, moshpit, uri) {
   // Define a shortcut function to reply in the channel
   await context.neo4j.run(`
-      MERGE (t:TRACK {spotify_track_id: CURRENT_TRACK_ID})
-      MERGE (m:Moshpit {moshpit_id: MOSHPIT_ID})-[r:PLAYED]->(t)
+      MERGE (t:TRACK {spotify_track_uri: uri})
+      MERGE (m:Moshpit {moshpit_id: moshpit})-[r:PLAYED]->(t)
         ON CREATE SET r.score = 0;
   `);
 }
@@ -86,11 +86,11 @@ export async function addTrack(context) {
  * Likes current track.
  * @param {Context} context
  */
-export async function like(context) {
+export async function like(context, moshpit, uri) {
   // Define a shortcut function to reply in the channel
   await context.neo4j.run(`
       MATCH (m:Moshpit)-[r:PLAYED]->(t:Track)
-      WHERE m.moshpit_id = MOSHPIT_ID AND t.spotify_track_id = CURRENT_TRACK_ID
+      WHERE m.moshpit_id = moshpit AND t.spotify_track_uri = uri
       SET r.score = r.score+1;
   `);
 }
@@ -99,11 +99,11 @@ export async function like(context) {
  * Dislikes current track.
  * @param {Context} context
  */
-export async function dislike(context) {
+export async function dislike(context, moshpit, uri) {
   // Define a shortcut function to reply in the channel
   await context.neo4j.run(`
       MATCH (m:Moshpit)-[r:PLAYED]->(t:Track)
-      WHERE m.moshpit_id = MOSHPIT_ID AND t.spotify_track_id = CURRENT_TRACK_ID
+      WHERE m.moshpit_id = moshpit AND t.spotify_track_uri = uri
       SET r.score = r.score-1;
   `);
 }
@@ -112,11 +112,11 @@ export async function dislike(context) {
  * Gets scores of all listened to tracks.
  * @param {Context} context
  */
-export async function getTrackScores(context) {
+export async function getTrackScores(context, moshpit) {
   // Define a shortcut function to reply in the channel
   await context.neo4j.run(`
       MATCH (m:MoshPit)-[r:PLAYED]->(t:Track)
-      WHERE m.moshpit_id = MOSHPIT_ID
-      RETURN t.spotify_track_id AS track, r.score AS score;
+      WHERE m.moshpit_id = moshpit
+      RETURN t.spotify_track_uri AS track, r.score AS score;
   `);
 }
