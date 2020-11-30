@@ -30,15 +30,11 @@ export async function SQL_to_Neo4j(context) {
   await context.neo4j_session.run(`
     LOAD CSV WITH HEADERS FROM 'csv_files/moshpit.csv' AS row
     MERGE (moshpit:Moshpit {moshpit_id: row.moshpit_id})
-      ON CREATE SET moshpit.discord_channel_id = row.discord_channel_id,
-      moshpit.join_secret = row.join_secret;
+      ON CREATE SET moshpit.discord_channel_id = row.discord_channel_id;
   `);
   await context.neo4j_session.run(`
     LOAD CSV WITH HEADERS FROM 'csv_files/moshpituser.csv' AS row
-    MERGE (user:MoshpitUser {discord_user_id: row.discord_user_id})
-      ON CREATE SET user.spotify_access_token = row.spotify_access_token,
-      user.spotify_update_token = row.spotify_update_token,
-      user.spotify_token_expiration = row.spotify_token_expiration;
+    MERGE (user:MoshpitUser {discord_user_id: row.discord_user_id});
   `);
   await context.neo4j_session.run(`
     LOAD CSV WITH HEADERS FROM 'csv_files/in.csv' AS row
