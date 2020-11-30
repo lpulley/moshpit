@@ -134,6 +134,11 @@ export async function start(context) {
         moshpit.moshpit_id,
         moshpit.spotify_playlist_id,
     );
+    // Populate the playlist and update the length
+    await ownerSpotify.addTracksToPlaylist(
+        moshpit.spotify_playlist_id,
+        trackURIs,
+    );
     playlistLength += trackURIs.length;
   }
 
@@ -166,10 +171,14 @@ export async function start(context) {
           where discord_user_id = '${listener.id}';
       `);
     } catch (error) {
-      listener.send('Something went wrong while joining the moshpit. Make ' +
-                    'sure you have an active Spotify session! You may need ' +
-                    'to start playback first.');
-      console.info(error);
+      if (listener.id === owner.id) {
+        throw error;
+      } else {
+        listener.send('Something went wrong while joining the moshpit. Make ' +
+                      'sure you have an active Spotify session! You may need ' +
+                      'to start playback first.');
+        console.info(error);
+      }
     }
   }));
 
@@ -221,6 +230,25 @@ export async function data(context) {
 
   if (result.rowCount > 0) {
     await reply(`\`\`\`\n${JSON.stringify(result.rows)}\n\`\`\``);
+  } else {
+    await reply('no results found.');
+  }
+}
+
+/**
+ * Deletes the current moshpit fromt the database
+ * @param {Context} context
+ */
+export async function quit(context) {
+  const reply = (content) => context.message.reply(content);
+
+  const result = await context.postgres.query(`
+      DELETE FROM "Moshpit"
+      WHERE owner_discord_id = '${context.message.author.id}';
+  `);
+
+  if (result.rowCount > 0) {
+    await reply(`your moshpits were deleted!`);
   } else {
     await reply('no results found.');
   }
