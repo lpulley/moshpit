@@ -1,6 +1,6 @@
 import Spotify from 'spotify-web-api-node';
 import * as Utilities from './utilities.mjs';
-import * as neo4j_functions from './neo4j.mjs';
+import * as Neo4j from './neo4j.mjs';
 
 /**
  * @typedef {Object} Context
@@ -136,9 +136,8 @@ export async function start(context) {
     )).flat();
 
     // Add the recommended tracks to the database
-    const response = await ownerSpotify.getAudioFeaturesForTracks(
-        trackCandidateIDs.map((trackURI) => trackURI.replace(
-        /^spotify:track:(.+)$/, '$1')););
+    const response =
+        await ownerSpotify.getAudioFeaturesForTracks(trackCandidateIDs);
     const trackFeatures = response.body.audio_features;
     for (let i = 0; i < trackURIs.length; i++) {
       const uri = trackURIs[i];
@@ -223,7 +222,7 @@ export async function start(context) {
 
   await context.message.channel.send('Started the moshpit!');
 
-  await neo4j_functions.SQL_to_Neo4j(context);
+  await Neo4j.sqlToNeo4j(context);
 }
 
 /**

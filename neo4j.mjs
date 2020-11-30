@@ -1,6 +1,3 @@
-import axios from 'axios';
-import * as Utilities from './utilities.mjs';
-
 /**
  * @typedef {Object} Context
  * @property {import('discord.js').Message} message
@@ -12,40 +9,62 @@ import * as Utilities from './utilities.mjs';
  * Exports SQL data to Neo4j.
  * @param {Context} context
  */
-export async function SQL_to_Neo4j(context) {
+export async function sqlToNeo4j(context) {
   await context.postgres.query(`
-    COPY (SELECT * FROM "Moshpit") TO 'csv_files/moshpit.csv' WITH CSV header;
-  `);
-  await context.postgres.query(`
-    COPY (SELECT * FROM "MoshpitUser") TO 'csv_files/moshpit_user.csv' WITH CSV header;
-  `);
-  await context.postgres.query(`
-    COPY (SELECT * FROM "Moshpit" m JOIN "MoshpitUser" mu ON m.moshpit_id = mu.moshpit_id)
-      TO 'csv_files/in.csv' WITH CSV header;
+      COPY (SELECT * FROM "Moshpit")
+      TO '${process.env['NEO4J_IMPORT']}/moshpit.csv'
+      WITH CSV header;
   `);
   await context.postgres.query(`
-    COPY (SELECT * FROM "Moshpit" m JOIN "MoshpitUser" mu ON m.owner_discord_id = mu.user_discord_id)
-      TO 'csv_files/leader.csv' WITH CSV header;
+      COPY (SELECT * FROM "MoshpitUser")
+      TO '${process.env['NEO4J_IMPORT']}/moshpit_user.csv'
+      WITH CSV header;
+  `);
+  await context.postgres.query(`
+      COPY (
+        SELECT *
+        FROM "Moshpit" m JOIN "MoshpitUser" mu
+        ON m.moshpit_id = mu.moshpit_id
+      )
+      TO '${process.env['NEO4J_IMPORT']}/in.csv'
+      WITH CSV header;
+  `);
+  await context.postgres.query(`
+      COPY (
+        SELECT *
+        FROM "Moshpit" m JOIN "MoshpitUser" mu
+        ON m.owner_discord_id = mu.discord_user_id
+      )
+      TO '${process.env['NEO4J_IMPORT']}/leader.csv'
+      WITH CSV header;
   `);
   await context.neo4j_session.run(`
-    LOAD CSV WITH HEADERS FROM 'csv_files/moshpit.csv' AS row
-    MERGE (moshpit:Moshpit {moshpit_id: row.moshpit_id})
+      LOAD CSV WITH HEADERS
+      FROM 'file:///moshpit.csv'
+      AS row
+      MERGE (moshpit:Moshpit {moshpit_id: row.moshpit_id})
   `);
   await context.neo4j_session.run(`
-    LOAD CSV WITH HEADERS FROM 'csv_files/moshpituser.csv' AS row
-    MERGE (user:MoshpitUser {discord_user_id: row.discord_user_id});
+      LOAD CSV WITH HEADERS
+      FROM 'file:///moshpit_user.csv'
+      AS row
+      MERGE (user:MoshpitUser {discord_user_id: row.discord_user_id});
   `);
   await context.neo4j_session.run(`
-    LOAD CSV WITH HEADERS FROM 'csv_files/in.csv' AS row
-    MATCH (moshpit:Moshpit {moshpit_id: row.moshpit_id})
-    MATCH (user:MoshpitUser {discord_user_id: row.discord_user_id})
-    MERGE (user)-[:IN]->(moshpit);
+      LOAD CSV WITH HEADERS
+      FROM 'file:///in.csv'
+      AS row
+      MATCH (moshpit:Moshpit {moshpit_id: row.moshpit_id})
+      MATCH (user:MoshpitUser {discord_user_id: row.discord_user_id})
+      MERGE (user)-[:IN]->(moshpit);
   `);
   await context.neo4j_session.run(`
-    LOAD CSV WITH HEADERS FROM 'csv_files/leader.csv' AS row
-    MATCH (moshpit:Moshpit {moshpit_id: row.moshpit_id})
-    MATCH (user:MoshpitUser {discord_user_id: row.discord_user_id})
-    MERGE (user)-[:LEADS]->(moshpit);
+      LOAD CSV WITH HEADERS
+      FROM 'file:///leader.csv'
+      AS row
+      MATCH (moshpit:Moshpit {moshpit_id: row.moshpit_id})
+      MATCH (user:MoshpitUser {discord_user_id: row.discord_user_id})
+      MERGE (user)-[:LEADS]->(moshpit);
   `);
 }
 
@@ -53,12 +72,12 @@ export async function SQL_to_Neo4j(context) {
  * Adds track to database.
  * @param {Context} context
  */
-export async function add_track(context) {
+export async function addTrack(context) {
   // Define a shortcut function to reply in the channel
-  const result = await context.neo4j_session.run(`
-    MERGE (t:TRACK {spotify_track_id: CURRENT_TRACK_ID})
-    MERGE (m:Moshpit {moshpit_id: MOSHPIT_ID})-[r:PLAYED]->(t)
-      ON CREATE SET r.score = 0;
+  await context.neo4j_session.run(`
+      MERGE (t:TRACK {spotify_track_id: CURRENT_TRACK_ID})
+      MERGE (m:Moshpit {moshpit_id: MOSHPIT_ID})-[r:PLAYED]->(t)
+        ON CREATE SET r.score = 0;
   `);
 }
 
@@ -68,10 +87,10 @@ export async function add_track(context) {
  */
 export async function like(context) {
   // Define a shortcut function to reply in the channel
-  const result = await context.neo4j_session.run(`
-    MATCH (m:Moshpit)-[r:PLAYED]->(t:Track)
-    WHERE m.moshpit_id = MOSHPIT_ID AND t.spotify_track_id = CURRENT_TRACK_ID
-    SET r.score = r.score+1;
+  await context.neo4j_session.run(`
+      MATCH (m:Moshpit)-[r:PLAYED]->(t:Track)
+      WHERE m.moshpit_id = MOSHPIT_ID AND t.spotify_track_id = CURRENT_TRACK_ID
+      SET r.score = r.score+1;
   `);
 }
 
@@ -81,10 +100,10 @@ export async function like(context) {
  */
 export async function dislike(context) {
   // Define a shortcut function to reply in the channel
-  const result = await context.neo4j_session.run(`
-    MATCH (m:Moshpit)-[r:PLAYED]->(t:Track)
-    WHERE m.moshpit_id = MOSHPIT_ID AND t.spotify_track_id = CURRENT_TRACK_ID
-    SET r.score = r.score-1;
+  await context.neo4j_session.run(`
+      MATCH (m:Moshpit)-[r:PLAYED]->(t:Track)
+      WHERE m.moshpit_id = MOSHPIT_ID AND t.spotify_track_id = CURRENT_TRACK_ID
+      SET r.score = r.score-1;
   `);
 }
 
@@ -92,11 +111,11 @@ export async function dislike(context) {
  * Gets scores of all listened to tracks.
  * @param {Context} context
  */
-export async function track_scores(context) {
+export async function getTrackScores(context) {
   // Define a shortcut function to reply in the channel
-  const result = await context.neo4j_session.run(`
-    MATCH (m:MoshPit)-[r:PLAYED]->(t:Track)
-    WHERE m.moshpit_id = MOSHPIT_ID
-    RETURN t.spotify_track_id AS track, r.score AS score;
+  await context.neo4j_session.run(`
+      MATCH (m:MoshPit)-[r:PLAYED]->(t:Track)
+      WHERE m.moshpit_id = MOSHPIT_ID
+      RETURN t.spotify_track_id AS track, r.score AS score;
   `);
 }
