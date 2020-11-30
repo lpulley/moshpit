@@ -114,8 +114,6 @@ export async function start(context) {
       '🖐️',
   );
 
-  await neo4j_functions.SQL_to_Neo4j(context);
-
   // Check how long the playlist is
   const playlistLengthResponse = await ownerSpotify.getPlaylistTracks(
       moshpit.spotify_playlist_id,
@@ -125,76 +123,64 @@ export async function start(context) {
 
   // Populate the playlist with more tracks if it's too small
   if (playlistLength < 5) {
-    const seedsToAdd = 5 - seedTracks.length;
-    const numNewTracks = 1;
+    const numNewTracks = 5 - playlistLength;
 
-    // Get each user's top 50 tracks' IDs as seed candidates
-    const trackCandidateIDs = (await Promise.all(
-    	[owner, ...listeners].map(async (user) => {
-    	  const userSpotify = await getSpotify(context, user);
-    	  const response = await userSpotify.getMyTopTracks({limit: 50});
-    	  const ids = response.body.items.map((item) => item.id);
-    	  return ids;
-    	}),
+    // Get each user's top 50 artists' IDs as seed candidates
+    const artistCandidateIDs = (await Promise.all(
+        [owner, ...listeners].map(async (user) => {
+          const userSpotify = await getSpotify(context, user);
+          const response = await userSpotify.getMyTopArtists({limit: 50});
+          const ids = response.body.items.map((item) => item.id);
+          return ids;
+        }),
     )).flat();
 
-    // Asynchronously generate track recommendations from the track candidates and top scoring tracks
+    // Asynchronously generate track recommendations from the artist candidates
     const trackURIs = await Promise.all(Array(numNewTracks).fill(null).map(
-    	async () => {
-    	  // Choose 5 artist IDs from these candidates at random to be the seeds
-    	  if (seedsToAdd > 0) {
-    		  const seedIDs = Array(5).fill(null).map(() => trackCandidateIDs[
-    		  Math.floor(Math.random() * artistCandidateIDs.length)
-    		  ]);
-    	  } else {
-    		  const seedIDs = Array(5).fill(null)
-    	  }
+        async () => {
+          // Choose 5 artist IDs from these candidates at random to be the seeds
+          const artistIDs = Array(5).fill(null).map(() => artistCandidateIDs[
+              Math.floor(Math.random() * artistCandidateIDs.length)
+          ]);
 
-    	  // Replace as many of seedIDs as possible
-    	  for (let i = 0; i < seedTracks.length; i++) {
-    		  seedIDs[i] = seedTracks[i];
-    	  }
-
-    	  // Return a recommended track ID
-    	  return (await ownerSpotify.getRecommendations({
-    		seed_artists: seedIDs,
-    		limit: 1,
-    	  })).body.tracks[0].uri;
-    	},
+          // Return a recommended track ID
+          return (await ownerSpotify.getRecommendations({
+            seed_artists: artistIDs,
+            limit: 1,
+          })).body.tracks[0].uri;
+        },
     ));
 
     // Populate the playlist and update the length
     await ownerSpotify.addTracksToPlaylist(
-    	moshpit.spotify_playlist_id,
-    	trackURIs,
+        moshpit.spotify_playlist_id,
+        trackURIs,
     );
     playlistLength += trackURIs.length;
 
     // Add the tracks to the database
-    const trackIDs = trackURIs.map((trackURI) => trackURI.replace(/^spotify:track:(.+)$/, '$1'));
-    const response = await ownerSpotify.getAudioFeaturesForTracks(trackURIs);
+    /*const response = await ownerSpotify.getAudioFeaturesForTracks(trackURIs);
     const trackFeatures = response.body.audio_features;
     for (let i = 0; i < trackURIs.length; i++) {
-      const id = trackIDs[i];
+      const uri = trackURIs[i];
       const features = trackFeatures[i];
       await context.postgres.query(`
-    	insert into "Recommendations" (
-    	  spotify_id,
-    	  energy,
-    	  danceability,
-    	  instrumentalness,
-    	  valence
-    	)
-    	values (
-    	  '${id}',
-    	  '${features.energy}',
-    	  '${features.danceability}',
-    	  '${features.instrumentalness}',
-    	  '${features.valence}'
-    	)
+        insert into "Recommendations" (
+          spotify_uri,
+          energy,
+          danceability,
+          instrumentalness,
+          valence
+        )
+        values (
+          '${uri}',
+          '${features.energy}',
+          '${features.danceability}',
+          '${features.instrumentalness}',
+          '${features.valence}'
+        )
       `);
-    }
-
+    }*/
   }
 
   // Determine the track to start on
