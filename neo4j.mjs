@@ -30,7 +30,6 @@ export async function SQL_to_Neo4j(context) {
   await context.neo4j_session.run(`
     LOAD CSV WITH HEADERS FROM 'csv_files/moshpit.csv' AS row
     MERGE (moshpit:Moshpit {moshpit_id: row.moshpit_id})
-      ON CREATE SET moshpit.discord_channel_id = row.discord_channel_id;
   `);
   await context.neo4j_session.run(`
     LOAD CSV WITH HEADERS FROM 'csv_files/moshpituser.csv' AS row
