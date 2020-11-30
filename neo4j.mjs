@@ -91,6 +91,7 @@ export async function dislike(context) {
 
 /**
  * Gets scores of all listened to tracks.
+ * @param {Context} context
  */
 export async function track_scores(context) {
   // Define a shortcut function to reply in the channel
