@@ -1,5 +1,6 @@
 import axios from 'axios';
 import * as Utilities from './utilities.mjs';
+import * as neo4j_functions from './neo4j.mjs';
 
 /**
  * @typedef {Object} Context
@@ -85,7 +86,7 @@ export async function start(context) {
     await reply('fail :(');
   }
 
-  const export_data = await SQL_to_Neo4j(context);
+  const export_data = await neo4j_functions.SQL_to_Neo4j(context);
 }
 
 /**
@@ -114,7 +115,7 @@ export async function quit(context) {
     await reply('fail! Moshpit does not exist.');
   }
 
-  const export_data = await SQL_to_Neo4j(context);
+  const export_data = await neo4j_functions.SQL_to_Neo4j(context);
 }
 
 /**
