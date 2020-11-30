@@ -14,9 +14,9 @@ const postgres = new Postgres.Pool();
 postgres.connect();
 
 // Add Neo4j driver and session
-const neo4j = require('neo4j-driver')
-const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
-const session = driver.session()
+const neo4j = require('neo4j-driver');
+const neo4j_driver = neo4j.driver(uri, neo4j.auth.basic(user, password));
+const neo4j_session = driver.session();
 
 // discord.js lets us easily use Discord's API
 import * as Discord from 'discord.js';
@@ -89,5 +89,5 @@ client.login(process.env['DISCORD_TOKEN']);
 // Exit the Postgres connection when the Node process exits
 process.on('exit', postgres.end);
 // Exit the Neo4j connection when the Node process exits
-process.on('exit', session.close());
-process.on('exit', driver.close());
+process.on('exit', neo4j_session.close());
+process.on('exit', neo4j_driver.close());
