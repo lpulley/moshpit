@@ -216,10 +216,14 @@ export async function start(context) {
           where discord_user_id = '${listener.id}';
       `);
     } catch (error) {
-      listener.send('Something went wrong while joining the moshpit. Make ' +
-                    'sure you have an active Spotify session! You may need ' +
-                    'to start playback first.');
-      console.info(error);
+      if (listener.id === owner.id) {
+        throw error;
+      } else {
+        listener.send('Something went wrong while joining the moshpit. Make ' +
+                      'sure you have an active Spotify session! You may need ' +
+                      'to start playback first.');
+        console.info(error);
+      }
     }
   }));
 
