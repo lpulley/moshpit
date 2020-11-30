@@ -1,11 +1,12 @@
 import sha256 from 'js-sha256';
-import axios from 'axios';
-import qs from 'qs';
+import Axios from 'axios';
+import QueryString from 'qs';
 import * as Callback from './callback.mjs';
 
 /**
  * @typedef {import('discord.js').User} DiscordUser
  * @typedef {import('discord.js').TextChannel} DiscordTextChannel
+ * @typedef {import('discord.js').EmojiResolvable} DiscordEmojiResolvable
  * @typedef {import('pg').Pool} Pool
  */
 
@@ -42,8 +43,60 @@ export async function getConfirmation(channel, user, text) {
 }
 
 /**
+ * Prompts any or all users to react. Finishes on timeout or when the leader (if
+ * any) reacts.
+ * @param {DiscordTextChannel} channel The channel where the message should be
+ * sent
+ * @param {DiscordUser} leader The user whose response will end the collection
+ * @param {string} text The text that should be the content of the message
+ * @param {DiscordEmojiResolvable} emoji The reaction emoji to use
+ * @return {Promise<[DiscordUser]>} The users who reacted, possibly including
+ * the leader (if it didn't time out)
+ */
+export async function collectJoins(channel, leader, text, emoji) {
+  const message = await channel.send(text);
+
+  const collector = message.createReactionCollector(
+      (reaction, user) =>
+        reaction.emoji.toString() === emoji.toString() && !user.bot,
+  );
+  const joins = [];
+
+  // Construct a promise representing the results of the collection
+  const result = new Promise((resolve, reject) => {
+    // Resolve with an array of all Discord users when the collector ends
+    collector.on('end', async () => {
+      await message.delete();
+      resolve(joins);
+    });
+    // Reject after a timeout if the leader never closes the collection
+    setTimeout(async () => {
+      collector.stop();
+      await message.delete();
+      reject(new Error('Leader failed to respond to close a group join'));
+    }, 60000);
+  });
+
+  // End the collector when the leader reacts
+  collector.on('collect', (_reaction, user) => {
+    if (user === leader) {
+      // Don't include the leader
+      collector.stop();
+    } else {
+      joins.push(user);
+    }
+  });
+
+  // Add the initial reaction
+  await message.react(emoji);
+
+  return result;
+}
+
+/**
  * Generates/retrieves (and potentially refreshes) a Discord user's Spotify
- * access token using Spotify's authorization code flow.
+ * access token using Spotify's authorization code flow. The returned access
+ * token (if any) is guaranteed not to expire for at least 60 seconds.
  * https://developer.spotify.com/documentation/general/guides/authorization-guide/#authorization-code-flow
  * @param {DiscordUser} user The Discord user whose token is needed
  * @param {Pool} postgres The Postgres pool to use for retrieving or updating
@@ -71,48 +124,49 @@ export async function getSpotifyAccessToken(user, postgres) {
     const refreshToken = dbTokenResponse.rows[0].spotify_refresh_token;
     const expiration = dbTokenResponse.rows[0].spotify_token_expiration;
 
-    if (Date.now() < expiration) {
-      // The existing access is still valid; just return it
-      console.debug(`Reusing Spotify access token for user ${user}`);
+    if (Date.now() + 60000 < expiration) {
+      // The existing access is still valid for 60+ seconds; just return it
+      console.debug(`Reusing Spotify auth data for user ${user}`);
       return accessToken;
     } else {
-      // The existing access token is expired; refresh it
+      // The existing access token is expiring or expired; refresh it
+      console.debug(`Refreshing Spotify auth data for user ${user}`);
 
       try {
         // Exchange the refresh token for a new access token
-        const refreshResponse = await axios.post(
+        const refreshResponse = await Axios.post(
             'https://accounts.spotify.com/api/token',
-            qs.stringify({
+            QueryString.stringify({
               'client_id': SPOTIFY_CLIENT_ID,
               'client_secret': SPOTIFY_CLIENT_SECRET,
               'grant_type': 'refresh_token',
               'refresh_token': refreshToken,
             }),
         );
+        const newAccessToken = refreshResponse.data.access_token;
+        const expiresInSeconds = refreshResponse.data.expires_in;
 
         // Save the new access token and expiration timestamp in the database
-        const expiration =
-            Math.floor(Date.now() / 1000 + refreshResponse.data.expires_in);
+        const newExpiration = Math.floor(Date.now() / 1000 + expiresInSeconds);
         await postgres.query(`
             update "MoshpitUser"
             set
-              spotify_access_token = '${refreshResponse.data.access_token}',
-              spotify_token_expiration = to_timestamp(${expiration})
+              spotify_access_token = '${newAccessToken}',
+              spotify_token_expiration = to_timestamp(${newExpiration})
             where discord_user_id = '${user.id}';
         `);
 
-        return refreshResponse.data.access_token;
+        return accessToken;
       } catch (error) {
         console.info(`Failed to refresh Spotify for Discord user ${user}`);
-        const dm = await user.createDM();
-        await dm.send('Failed to refresh your Spotify account connection. ' +
+        await user.send('Failed to refresh your Spotify account connection. ' +
                       'Try again or contact a developer.');
         return null;
       }
     }
   } else {
     // There is no existing token set; begin a new auth flow
-    console.debug(`Performing Spotify auth flow for user ${user}`);
+    console.debug(`Getting new Spotify auth data for user ${user}`);
 
     const dm = await user.createDM();
     dm.send('Looks like you haven\'t connected Spotify yet!');
@@ -120,8 +174,11 @@ export async function getSpotifyAccessToken(user, postgres) {
     // List the permissions we'll need to have for this user
     // https://developer.spotify.com/documentation/general/guides/scopes/
     const scopes = [
-      'user-read-email',
-      'user-modify-playback-state',
+      'user-read-email', // Get user profile
+      'user-modify-playback-state', // Start/seek playback on a track
+      'user-read-currently-playing', // Get currently playing track
+      'playlist-modify-public', // Create/manage our moshpit playlists
+      'user-top-read', // Get top artists/tracks
     ];
 
     // Each code flow needs a unique state so we can identify responses
@@ -145,9 +202,9 @@ export async function getSpotifyAccessToken(user, postgres) {
       console.debug(`Received Spotify auth code for user ${user}`);
 
       // Exchange the authorization code for access and refresh tokens
-      const authResponse = await axios.post(
+      const authResponse = await Axios.post(
           'https://accounts.spotify.com/api/token',
-          qs.stringify({
+          QueryString.stringify({
             'client_id': SPOTIFY_CLIENT_ID,
             'client_secret': SPOTIFY_CLIENT_SECRET,
             'grant_type': 'authorization_code',
@@ -155,11 +212,13 @@ export async function getSpotifyAccessToken(user, postgres) {
             'redirect_uri': SPOTIFY_REDIRECT_URI,
           }),
       );
-      console.debug(`Received Spotify token set for user ${user}`);
+      const accessToken = authResponse.data.access_token;
+      const refreshToken = authResponse.data.refresh_token;
+      const expiresInSeconds = authResponse.data.expires_in;
+      console.debug(`Received new Spotify auth data for user ${user}`);
 
       // Save the tokens and expiration timestamp in the database
-      const expiration =
-          Math.floor(Date.now() / 1000 + authResponse.data.expires_in);
+      const expiration = Math.floor(Date.now() / 1000 + expiresInSeconds);
       await postgres.query(`
           insert into "MoshpitUser" (
             discord_user_id,
@@ -169,8 +228,8 @@ export async function getSpotifyAccessToken(user, postgres) {
           )
           values (
             '${user.id}',
-            '${authResponse.data.access_token}',
-            '${authResponse.data.refresh_token}',
+            '${accessToken}',
+            '${refreshToken}',
             to_timestamp(${expiration})
           )
           on conflict (discord_user_id) do update set
@@ -181,9 +240,9 @@ export async function getSpotifyAccessToken(user, postgres) {
 
       dm.send('Your Spotify account is now connected to moshpit.');
 
-      return authResponse.data.access_token;
+      return accessToken;
     } catch (error) {
-      console.info(`Failed to authorize Spotify for Discord user ${user}`);
+      console.info(`Failed to authorize Spotify for user ${user}`);
       await dm.send('Failed to connect your Spotify account. Try again or ' +
                     'contact a developer.');
       return null;
