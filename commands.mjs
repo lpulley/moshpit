@@ -159,16 +159,12 @@ export async function start(context) {
 
     // Add the tracks to the database
     const response = await ownerSpotify.getAudioFeaturesForTracks(trackURIs);
-    const track_features = response.body.audio_features;
-    for (var i = 0; i < trackURIs.length; i++) {
+    const trackFeatures = response.body.audio_features;
+    for (let i = 0; i < trackURIs.length; i++) {
       const uri = trackURIs[i];
-      const features = track_features[i];
-      const energy = features.energy;
-      const danceability = features.danceability;
-      const instrumentalness = features.instrumentalness;
-      const valence = features.valence
+      const features = trackFeatures[i];
       await context.postgres.query(`
-        insert into "recommendations" (
+        insert into "Recommendations" (
           spotify_uri,
           energy,
           danceability,
@@ -177,12 +173,12 @@ export async function start(context) {
         )
         values (
           '${uri}',
-          '${energy}',
-          '${danceability}',
-          '${instrumentalness}',
-          '${valence}'
+          '${features.energy}',
+          '${features.danceability}',
+          '${features.instrumentalness}',
+          '${features.valence}'
         )
-      `)
+      `);
     }
   }
 
