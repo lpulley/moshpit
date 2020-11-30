@@ -32,6 +32,7 @@ const guildCommands = {
   'link': Commands.link,
   'start': Commands.start,
   'data': Commands.data,
+  'quit': Commands.quit,
   'aq1': Commands.aq1,
   'aq2': Commands.aq2,
 };

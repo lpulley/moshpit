@@ -281,6 +281,25 @@ export async function data(context) {
 }
 
 /**
+ * Deletes the current moshpit fromt the database
+ * @param {Context} context
+ */
+export async function quit(context) {
+  const reply = (content) => context.message.reply(content);
+
+  const result = await context.postgres.query(`
+      DELETE FROM "Moshpit"
+      WHERE owner_discord_id = '${context.message.author.id}';
+  `);
+
+  if (result.rowCount > 0) {
+    await reply(`your moshpits were deleted!`);
+  } else {
+    await reply('no results found.');
+  }
+}
+
+/**
  * Advanced Query 1: Count total users with expired Spotify tokens, grouped by
  * the Discord Guild they are in.
  * @param {Context} context
