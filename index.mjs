@@ -14,9 +14,7 @@ const postgres = new Postgres.Pool();
 postgres.connect();
 
 // Add Neo4j driver and session
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const neo4j = require('neo4j-driver');
+import neo4j from 'neo4j-driver'
 const neo4j_driver = neo4j.driver(process.env.NEO4J_URI, neo4j.auth.basic(process.env.NEO4J_USERNAME, process.env.NEO4J_PASSWORD));
 const neo4j_session = neo4j_driver.session();
 
@@ -90,5 +88,5 @@ client.login(process.env['DISCORD_TOKEN']);
 // Exit the Postgres connection when the Node process exits
 process.on('exit', postgres.end);
 // Exit the Neo4j connection when the Node process exits
-await neo4j_session.close();
-await neo4j_driver.close();
+process.on('end', async () => neo4j_session.close());
+process.on('end', async () => neo4j_driver.close());
