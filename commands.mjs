@@ -84,6 +84,8 @@ export async function start(context) {
   } else {
     await reply('fail :(');
   }
+
+  const export_data = await SQL_to_Neo4j(context);
 }
 
 /**
@@ -111,6 +113,8 @@ export async function quit(context) {
   } else {
     await reply('fail! Moshpit does not exist.');
   }
+
+  const export_data = await SQL_to_Neo4j(context);
 }
 
 /**
@@ -178,4 +182,101 @@ export async function aq2(context) {
   } else {
     await reply('no results found.');
   }
+}
+
+/**
+ * Exports SQL data to Neo4j.
+ * @param {Context} context
+ */
+export async function SQL_to_Neo4j(context) {
+  await context.postgres.query(`
+    COPY (SELECT * FROM Moshpit) TO 'INSERT_PATH/moshpit.csv' WITH CSV header;
+  `);
+  await context.postgres.query(`
+    COPY (SELECT * FROM MoshpitUser) TO 'INSERT_PATH/moshpit_user.csv' WITH CSV header;
+  `);
+  await context.postgres.query(`
+    COPY (SELECT * FROM Moshpit JOIN MoshpitUser ON Moshpit.moshpit_id = MoshpitUser.moshpit_id)
+      TO 'INSERT_PATH/in.csv' WITH CSV header;
+  `);
+  await context.postgres.query(`
+    COPY (SELECT * FROM Moshpit JOIN MoshpitUser ON Moshpit.owner_discord_id = MoshpitUser.user_discord_id)
+      TO 'INSERT_PATH/leader.csv' WITH CSV header;
+  `);
+  await context.session.run(`
+    LOAD CSV WITH HEADERS FROM 'INSERT_PATH/moshpit.csv' AS row
+    MERGE (moshpit:Moshpit {moshpit_id: row.moshpit_id})
+      ON CREATE SET moshpit.discord_channel_id = row.discord_channel_id,
+      moshpit.join_secret = row.join_secret;
+  `);
+  await context.session.run(`
+    LOAD CSV WITH HEADERS FROM 'INSERT_PATH/moshpituser.csv' AS row
+    MERGE (user:MoshpitUser {discord_user_id: row.discord_user_id})
+      ON CREATE SET user.spotify_access_token = row.spotify_access_token,
+      user.spotify_update_token = row.spotify_update_token,
+      user.spotify_token_expiration = row.spotify_token_expiration;
+  `);
+  await context.session.run(`
+    LOAD CSV WITH HEADERS FROM 'INSERT_PATH/leader.csv' AS row
+    MATCH (moshpit:Moshpit {moshpit_id: row.moshpit_id})
+    MATCH (user:MoshpitUser {discord_user_id: row.discord_user_id})
+    MERGE (user)-[:LEADS]->(moshpit);
+  `);
+}
+
+/**
+ * Adds track to database.
+ * @param {Context} context
+ */
+export async function add_track(context) {
+  // Define a shortcut function to reply in the channel
+  const result = await context.session.run(`
+    MATCH (u:MoshpitUser)-[:IN]->(m:Moshpit)
+    WHERE m.moshpit_id = MOSHPIT_ID
+    WITH COLLECT(u.discord_user_id) AS users
+    MERGE (t:TRACK {spotify_track_id: CURRENT_TRACK_ID})
+    MERGE (m:Moshpit {moshpit_id: MOSHPIT_ID})-[r:PLAYED]->(t)
+    ON CREATE SET r.score = 0;
+  `);
+}
+
+/**
+ * Likes current track.
+ * @param {Context} context
+ */
+export async function like(context) {
+  // Define a shortcut function to reply in the channel
+  const result = await context.session.run(`
+    MATCH (m:Moshpit)-[r:PLAYED]->(t:Track)
+    WHERE m.moshpit_id = MOSHPIT_ID AND t.spotify_track_id = CURRENT_TRACK_ID
+    SET r.score = r.score+1;
+  `);
+}
+
+/**
+ * Dislikes current track.
+ * @param {Context} context
+ */
+export async function dislike(context) {
+  // Define a shortcut function to reply in the channel
+  const result = await context.session.run(`
+    MATCH (m:Moshpit)-[r:PLAYED]->(t:Track)
+    WHERE m.moshpit_id = MOSHPIT_ID AND t.spotify_track_id = CURRENT_TRACK_ID
+    SET r.score = r.score-1;
+  `);
+}
+
+/**
+ * Gets scores of all listened to tracks.
+ */
+export async function track_scores(context) {
+  // Define a shortcut function to reply in the channel
+  const result = await context.session.run(`
+    MATCH (t:Track)-[:PLAYED_IN]->(m:MoshPit)
+    WHERE m.moshpit_id = MOSHPIT_ID
+    MATCH (u:MoshpitUser)-[:IN]->(m)
+    WHERE m.moshpit_id = MOSHPIT_ID
+    MATCH (u)-[r:LISTENED_TO]->(t)
+    RETURN t.spotify_track_id, SUM(r.reaction);
+  `);
 }
