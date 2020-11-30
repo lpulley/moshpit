@@ -7,6 +7,7 @@ import * as Neo4j from './neo4j.mjs';
  * @property {import('discord.js').Message} message
  * @property {[string]} content
  * @property {import('pg').Pool} postgres
+ * @property {import('neo4j-driver').Session} neo4j
  */
 
 /**

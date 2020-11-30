@@ -58,7 +58,7 @@ client.on('message', async (message) => {
             message: message,
             content: messageWords.slice(1),
             postgres: postgres,
-            neo4j_session: neo4jSession,
+            neo4j: neo4jSession,
           };
           // Execute the command
           await commands[messageCommand](context);

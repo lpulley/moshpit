@@ -3,6 +3,7 @@
  * @property {import('discord.js').Message} message
  * @property {[string]} content
  * @property {import('pg').Pool} postgres
+ * @property {import('neo4j-driver').Session} neo4j
  */
 
 /**
@@ -38,19 +39,19 @@ export async function sqlToNeo4j(context) {
       TO '${process.env['NEO4J_IMPORT']}/leader.csv'
       WITH CSV header;
   `);
-  await context.neo4j_session.run(`
+  await context.neo4j.run(`
       LOAD CSV WITH HEADERS
       FROM 'file:///moshpit.csv'
       AS row
       MERGE (moshpit:Moshpit {moshpit_id: row.moshpit_id})
   `);
-  await context.neo4j_session.run(`
+  await context.neo4j.run(`
       LOAD CSV WITH HEADERS
       FROM 'file:///moshpit_user.csv'
       AS row
       MERGE (user:MoshpitUser {discord_user_id: row.discord_user_id});
   `);
-  await context.neo4j_session.run(`
+  await context.neo4j.run(`
       LOAD CSV WITH HEADERS
       FROM 'file:///in.csv'
       AS row
@@ -58,7 +59,7 @@ export async function sqlToNeo4j(context) {
       MATCH (user:MoshpitUser {discord_user_id: row.discord_user_id})
       MERGE (user)-[:IN]->(moshpit);
   `);
-  await context.neo4j_session.run(`
+  await context.neo4j.run(`
       LOAD CSV WITH HEADERS
       FROM 'file:///leader.csv'
       AS row
@@ -74,7 +75,7 @@ export async function sqlToNeo4j(context) {
  */
 export async function addTrack(context) {
   // Define a shortcut function to reply in the channel
-  await context.neo4j_session.run(`
+  await context.neo4j.run(`
       MERGE (t:TRACK {spotify_track_id: CURRENT_TRACK_ID})
       MERGE (m:Moshpit {moshpit_id: MOSHPIT_ID})-[r:PLAYED]->(t)
         ON CREATE SET r.score = 0;
@@ -87,7 +88,7 @@ export async function addTrack(context) {
  */
 export async function like(context) {
   // Define a shortcut function to reply in the channel
-  await context.neo4j_session.run(`
+  await context.neo4j.run(`
       MATCH (m:Moshpit)-[r:PLAYED]->(t:Track)
       WHERE m.moshpit_id = MOSHPIT_ID AND t.spotify_track_id = CURRENT_TRACK_ID
       SET r.score = r.score+1;
@@ -100,7 +101,7 @@ export async function like(context) {
  */
 export async function dislike(context) {
   // Define a shortcut function to reply in the channel
-  await context.neo4j_session.run(`
+  await context.neo4j.run(`
       MATCH (m:Moshpit)-[r:PLAYED]->(t:Track)
       WHERE m.moshpit_id = MOSHPIT_ID AND t.spotify_track_id = CURRENT_TRACK_ID
       SET r.score = r.score-1;
@@ -113,7 +114,7 @@ export async function dislike(context) {
  */
 export async function getTrackScores(context) {
   // Define a shortcut function to reply in the channel
-  await context.neo4j_session.run(`
+  await context.neo4j.run(`
       MATCH (m:MoshPit)-[r:PLAYED]->(t:Track)
       WHERE m.moshpit_id = MOSHPIT_ID
       RETURN t.spotify_track_id AS track, r.score AS score;
