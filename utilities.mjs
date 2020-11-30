@@ -94,6 +94,84 @@ export async function collectJoins(channel, leader, text, emoji) {
 }
 
 /**
+ * @param {Spotify} ownerSpotify
+ * @param {Spotify[]} userSpotifys
+ * @param {number} count
+ * @param {Pool} postgres
+ * @param {string} moshpitID
+ * @param {string} playlistID
+ * @return {string[]} An array of the added tracks' URIs
+ */
+export async function addTracks(
+    ownerSpotify,
+    userSpotifys,
+    count,
+    postgres,
+    moshpitID,
+    playlistID,
+) {
+  // Get each user's top 50 tracks' IDs as seed candidates
+  const trackCandidateIDs = (await Promise.all(
+      userSpotifys.map(async (spotify) => {
+        const response = await spotify.getMyTopTracks({limit: 50});
+        const ids = response.body.items.map((item) => item.id);
+        return ids;
+      }),
+  )).flat();
+
+  // Asynchronously generate track recommendations from the track candidates
+  const trackURIs = await Promise.all(Array(count).fill(null).map(
+      async () => {
+        // Choose 5 track IDs from these candidates at random to be the seeds
+        const trackIDs = Array(5).fill(null).map(() => trackCandidateIDs[
+            Math.floor(Math.random() * trackCandidateIDs.length)
+        ]);
+
+        // Return a recommended track ID
+        return (await ownerSpotify.getRecommendations({
+          seed_tracks: trackIDs,
+          limit: 1,
+        })).body.tracks[0].uri;
+      },
+  ));
+
+  // Add the recommended tracks to the database
+  const response =
+      await ownerSpotify.getAudioFeaturesForTracks(trackCandidateIDs);
+  const trackFeatures = response.body.audio_features;
+  for (let i = 0; i < trackURIs.length; i++) {
+    const uri = trackURIs[i];
+    const features = trackFeatures[i];
+    await postgres.query(`
+        insert into "Recommendations" (
+          spotify_uri,
+          moshpit_id,
+          energy,
+          danceability,
+          instrumentalness,
+          valence
+        )
+        values (
+          '${uri}',
+          '${moshpitID}',
+          '${features.energy}',
+          '${features.danceability}',
+          '${features.instrumentalness}',
+          '${features.valence}'
+        );
+    `);
+  }
+
+  // Populate the playlist and update the length
+  await ownerSpotify.addTracksToPlaylist(
+      playlistID,
+      trackURIs,
+  );
+
+  return trackURIs;
+}
+
+/**
  * Generates/retrieves (and potentially refreshes) a Discord user's Spotify
  * access token using Spotify's authorization code flow. The returned access
  * token (if any) is guaranteed not to expire for at least 60 seconds.

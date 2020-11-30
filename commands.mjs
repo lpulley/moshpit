@@ -124,61 +124,16 @@ export async function start(context) {
 
   // Populate the playlist with more tracks if it's too small
   if (playlistLength < 5) {
-    const numNewTracks = 5 - playlistLength;
-
-    // Get each user's top 50 tracks' IDs as seed candidates
-    const trackCandidateIDs = (await Promise.all(
-        [owner, ...listeners].map(async (user) => {
-          const userSpotify = await getSpotify(context, user);
-          const response = await userSpotify.getMyTopTracks({limit: 10});
-          const ids = response.body.items.map((item) => item.id);
-          return ids;
-        }),
-    )).flat();
-
-    // Asynchronously generate track recommendations from the track candidates
-    const trackURIs = await Promise.all(Array(numNewTracks).fill(null).map(
-        async () => {
-          // Choose 5 track IDs from these candidates at random to be the seeds
-          const trackIDs = Array(5).fill(null).map(() => trackCandidateIDs[
-              Math.floor(Math.random() * trackCandidateIDs.length)
-          ]);
-
-          // Return a recommended track ID
-          return (await ownerSpotify.getRecommendations({
-            seed_tracks: trackIDs,
-            limit: 1,
-          })).body.tracks[0].uri;
-        },
-    ));
-
-    // Add the recommended tracks to the database
-    const response =
-        await ownerSpotify.getAudioFeaturesForTracks(trackCandidateIDs);
-    const trackFeatures = response.body.audio_features;
-    for (let i = 0; i < trackURIs.length; i++) {
-      const uri = trackURIs[i];
-      const features = trackFeatures[i];
-      await context.postgres.query(`
-          insert into "Recommendations" (
-            spotify_uri,
-            moshpit_id,
-            energy,
-            danceability,
-            instrumentalness,
-            valence
-          )
-          values (
-            '${uri}',
-            '${moshpit.moshpit_id}',
-            '${features.energy}',
-            '${features.danceability}',
-            '${features.instrumentalness}',
-            '${features.valence}'
-          );
-      `);
-    }
-
+    const trackURIs = await Utilities.addTracks(
+        ownerSpotify,
+        [ownerSpotify, ...await Promise.all(
+            listeners.map((user) => getSpotify(context, user)),
+        )],
+        5 - playlistLength,
+        context.postgres,
+        moshpit.moshpit_id,
+        moshpit.spotify_playlist_id,
+    );
     // Populate the playlist and update the length
     await ownerSpotify.addTracksToPlaylist(
         moshpit.spotify_playlist_id,
