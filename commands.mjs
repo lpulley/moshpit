@@ -1,5 +1,6 @@
 import Spotify from 'spotify-web-api-node';
 import * as Utilities from './utilities.mjs';
+import * as neo4j_functions from './neo4j.mjs';
 
 /**
  * @typedef {Object} Context
@@ -156,30 +157,7 @@ export async function start(context) {
         trackURIs,
     );
     playlistLength += trackURIs.length;
-
-    // Add the tracks to the database
-    const response = await ownerSpotify.getAudioFeaturesForTracks(trackURIs);
-    const trackFeatures = response.body.audio_features;
-    for (let i = 0; i < trackURIs.length; i++) {
-      const uri = trackURIs[i];
-      const features = trackFeatures[i];
-      await context.postgres.query(`
-        insert into "Recommendations" (
-          spotify_uri,
-          energy,
-          danceability,
-          instrumentalness,
-          valence
-        )
-        values (
-          '${uri}',
-          '${features.energy}',
-          '${features.danceability}',
-          '${features.instrumentalness}',
-          '${features.valence}'
-        )
-      `);
-    }
+    
   }
 
   // Determine the track to start on
@@ -219,6 +197,8 @@ export async function start(context) {
   }));
 
   await context.message.channel.send('Started the moshpit!');
+
+  await neo4j_functions.SQL_to_Neo4j(context);
 }
 
 /**
