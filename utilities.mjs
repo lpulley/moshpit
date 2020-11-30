@@ -176,6 +176,7 @@ export async function getSpotifyAccessToken(user, postgres) {
     const scopes = [
       'user-read-email', // Get user profile
       'user-modify-playback-state', // Start/seek playback on a track
+      'user-read-playback-state',
       'user-read-currently-playing', // Get currently playing track
       'playlist-modify-public', // Create/manage our moshpit playlists
       'user-top-read', // Get top artists/tracks
