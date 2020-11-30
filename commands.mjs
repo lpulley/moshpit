@@ -293,7 +293,7 @@ export async function quit(context) {
   `);
 
   if (result.rowCount > 0) {
-    await reply(`\`${JSON.stringify(result.rows)}\``);
+    await reply(`your moshpits were deleted!`);
   } else {
     await reply('no results found.');
   }
