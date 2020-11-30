@@ -1,12 +1,13 @@
 import Spotify from 'spotify-web-api-node';
 import * as Utilities from './utilities.mjs';
-import * as neo4j_functions from './neo4j.mjs';
+import * as Neo4j from './neo4j.mjs';
 
 /**
  * @typedef {Object} Context
  * @property {import('discord.js').Message} message
  * @property {[string]} content
  * @property {import('pg').Pool} postgres
+ * @property {import('neo4j-driver').Session} neo4j
  */
 
 /**
@@ -135,32 +136,6 @@ export async function start(context) {
         }),
     )).flat();
 
-    // Add the recommended tracks to the database
-    const response = await ownerSpotify.getAudioFeaturesForTracks(
-        trackCandidateIDs.map((trackURI) => trackURI.replace(
-        /^spotify:track:(.+)$/, '$1')););
-    const trackFeatures = response.body.audio_features;
-    for (let i = 0; i < trackURIs.length; i++) {
-      const uri = trackURIs[i];
-      const features = trackFeatures[i];
-      await context.postgres.query(`
-        insert into "Recommendations" (
-          spotify_uri,
-          energy,
-          danceability,
-          instrumentalness,
-          valence
-        )
-        values (
-          '${uri}',
-          '${features.energy}',
-          '${features.danceability}',
-          '${features.instrumentalness}',
-          '${features.valence}'
-        )
-      `);
-    }
-
     // Asynchronously generate track recommendations from the track candidates
     const trackURIs = await Promise.all(Array(numNewTracks).fill(null).map(
         async () => {
@@ -176,6 +151,33 @@ export async function start(context) {
           })).body.tracks[0].uri;
         },
     ));
+
+    // Add the recommended tracks to the database
+    const response =
+        await ownerSpotify.getAudioFeaturesForTracks(trackCandidateIDs);
+    const trackFeatures = response.body.audio_features;
+    for (let i = 0; i < trackURIs.length; i++) {
+      const uri = trackURIs[i];
+      const features = trackFeatures[i];
+      await context.postgres.query(`
+          insert into "Recommendations" (
+            spotify_uri,
+            moshpit_id,
+            energy,
+            danceability,
+            instrumentalness,
+            valence
+          )
+          values (
+            '${uri}',
+            '${moshpit.moshpit_id}',
+            '${features.energy}',
+            '${features.danceability}',
+            '${features.instrumentalness}',
+            '${features.valence}'
+          );
+      `);
+    }
 
     // Populate the playlist and update the length
     await ownerSpotify.addTracksToPlaylist(
@@ -250,7 +252,7 @@ export async function start(context) {
     }
   }, 5000);
 
-  await neo4j_functions.SQL_to_Neo4j(context);
+  await Neo4j.sqlToNeo4j(context);
 }
 
 /**
