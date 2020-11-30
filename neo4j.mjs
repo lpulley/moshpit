@@ -14,17 +14,17 @@ import * as Utilities from './utilities.mjs';
  */
 export async function SQL_to_Neo4j(context) {
   await context.postgres.query(`
-    COPY (SELECT * FROM Moshpit) TO 'csv_files/moshpit.csv' WITH CSV header;
+    COPY (SELECT * FROM "Moshpit") TO 'csv_files/moshpit.csv' WITH CSV header;
   `);
   await context.postgres.query(`
-    COPY (SELECT * FROM MoshpitUser) TO 'csv_files/moshpit_user.csv' WITH CSV header;
+    COPY (SELECT * FROM "MoshpitUser") TO 'csv_files/moshpit_user.csv' WITH CSV header;
   `);
   await context.postgres.query(`
-    COPY (SELECT * FROM Moshpit JOIN MoshpitUser ON Moshpit.moshpit_id = MoshpitUser.moshpit_id)
+    COPY (SELECT * FROM "Moshpit" m JOIN "MoshpitUser" mu ON m.moshpit_id = mu.moshpit_id)
       TO 'csv_files/in.csv' WITH CSV header;
   `);
   await context.postgres.query(`
-    COPY (SELECT * FROM Moshpit JOIN MoshpitUser ON Moshpit.owner_discord_id = MoshpitUser.user_discord_id)
+    COPY (SELECT * FROM "Moshpit" m JOIN "MoshpitUser" mu ON m.owner_discord_id = mu.user_discord_id)
       TO 'csv_files/leader.csv' WITH CSV header;
   `);
   await context.neo4j_session.run(`
