@@ -174,14 +174,18 @@ export async function start(context) {
     const listenerSpotify = await getSpotify(context, listener);
     // TODO: Can we force the users to open sessions before trying to play?
 
-    // Return each promise to Promise.all instead of await-ing so that they can
-    // run in parallel
     try {
       await listenerSpotify.setShuffle(false);
       await listenerSpotify.play({
         context_uri: `spotify:playlist:${moshpit.spotify_playlist_id}`,
         offset: {uri: startTrackURI},
       });
+      // Update the listener's most recent moshpit
+      await context.postgres.query(`
+          update "MoshpitUser"
+          set moshpit_id = '${moshpit.moshpit_id}'
+          where discord_user_id = '${listener.id}';
+      `);
     } catch (error) {
       listener.send('Something went wrong while joining the moshpit. Make ' +
                     'sure you have an active Spotify session! You may need ' +
