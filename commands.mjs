@@ -216,6 +216,12 @@ export async function SQL_to_Neo4j(context) {
       user.spotify_update_token = row.spotify_update_token,
       user.spotify_token_expiration = row.spotify_token_expiration;
   `);
+  await context.neo4j.run(`
+    LOAD CSV WITH HEADERS FROM 'INSERTPATH/in.csv' AS row
+    MATCH (moshpit:Moshpit {moshpit_id: row.moshpit_id})
+    MATCH (user:MoshpitUser {discord_user_id: row.discord_user_id})
+    MERGE (user)-[:IN]->(moshpit);
+  `);
   await context.session.run(`
     LOAD CSV WITH HEADERS FROM 'INSERT_PATH/leader.csv' AS row
     MATCH (moshpit:Moshpit {moshpit_id: row.moshpit_id})
@@ -231,12 +237,9 @@ export async function SQL_to_Neo4j(context) {
 export async function add_track(context) {
   // Define a shortcut function to reply in the channel
   const result = await context.session.run(`
-    MATCH (u:MoshpitUser)-[:IN]->(m:Moshpit)
-    WHERE m.moshpit_id = MOSHPIT_ID
-    WITH COLLECT(u.discord_user_id) AS users
     MERGE (t:TRACK {spotify_track_id: CURRENT_TRACK_ID})
     MERGE (m:Moshpit {moshpit_id: MOSHPIT_ID})-[r:PLAYED]->(t)
-    ON CREATE SET r.score = 0;
+      ON CREATE SET r.score = 0;
   `);
 }
 
@@ -272,11 +275,8 @@ export async function dislike(context) {
 export async function track_scores(context) {
   // Define a shortcut function to reply in the channel
   const result = await context.session.run(`
-    MATCH (t:Track)-[:PLAYED_IN]->(m:MoshPit)
+    MATCH (m:MoshPit)-[r:PLAYED]->(t:Track)
     WHERE m.moshpit_id = MOSHPIT_ID
-    MATCH (u:MoshpitUser)-[:IN]->(m)
-    WHERE m.moshpit_id = MOSHPIT_ID
-    MATCH (u)-[r:LISTENED_TO]->(t)
-    RETURN t.spotify_track_id, SUM(r.reaction);
+    RETURN t.spotify_track_id AS track, r.score AS score;
   `);
 }
