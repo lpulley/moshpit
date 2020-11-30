@@ -194,48 +194,21 @@ export async function start(context) {
 }
 
 /**
- * Removes moshpit.
- * @param {Context} context
- */
-export async function quit(context) {
-  const reply = (content) => context.message.reply(content);
-
-  const result = await context.postgres.query(`
-      DELETE FROM "Moshpit"
-      WHERE owner_discord_id = '${context.message.member.user.id}'
-        AND discord_channel_id = '${context.message.channel.id}'
-      RETURNING *;
-  `);
-
-  await context.postgres.query(`
-      UPDATE "MoshpitUser"
-      SET moshpit_id = NULL
-      WHERE discord_user_id = '${context.message.member.user.id}';
-  `);
-
-  if (result.rowCount > 0) {
-    await reply(`success! Moshpit #${result.rows[0].moshpit_id} deleted.`);
-  } else {
-    await reply('fail! Moshpit does not exist.');
-  }
-}
-
-/**
- * Gets moshpit data.
+ * Gets data for the user's moshpit in the current server if one exists.
  * @param {Context} context
  */
 export async function data(context) {
   const reply = (content) => context.message.reply(content);
 
   const result = await context.postgres.query(`
-      SELECT moshpit_id, discord_channel_id, owner_discord_id
-      FROM "Moshpit"
-      WHERE owner_discord_id = '${context.message.member.user.id}'
-        AND discord_channel_id = '${context.message.channel.id}';
+      select moshpit_id, discord_guild_id, owner_discord_id
+      from "Moshpit"
+      where owner_discord_id = '${context.message.author.id}'
+        and discord_guild_id = '${context.message.guild.id}';
   `);
 
   if (result.rowCount > 0) {
-    await reply(`\`${JSON.stringify(result.rows)}\``);
+    await reply(`\`\`\`\n${JSON.stringify(result.rows)}\n\`\`\``);
   } else {
     await reply('no results found.');
   }
@@ -243,17 +216,17 @@ export async function data(context) {
 
 /**
  * Advanced Query 1: Count total users with expired Spotify tokens, grouped by
- * the Discord Channel they are in.
+ * the Discord Guild they are in.
  * @param {Context} context
  */
 export async function aq1(context) {
   const reply = (content) => context.message.reply(content);
 
   const result = await context.postgres.query(`
-      SELECT m.discord_channel_id, COUNT(mu.discord_user_id)
+      SELECT m.discord_guild_id, COUNT(mu.discord_user_id)
       FROM "Moshpit" m NATURAL JOIN "MoshpitUser" mu
       WHERE mu.spotify_token_expiration < CURRENT_TIMESTAMP
-      GROUP BY m.discord_channel_id;
+      GROUP BY m.discord_guild_id;
   `);
 
   if (result.rowCount > 0) {
