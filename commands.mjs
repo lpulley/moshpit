@@ -223,7 +223,34 @@ export async function start(context) {
     }
   }));
 
-  await context.message.channel.send('Started the moshpit!');
+  // Send an initial "Now Playing" message
+  let playbackState = (await ownerSpotify.getMyCurrentPlaybackState()).body;
+  let nowPlayingMessage =
+      await reply(`now playing: "${playbackState.item.name}"`);
+
+  // Check the owner's player status on an interval
+  setInterval(async function() { // Using lambda because we need 'this'
+    const oldPlaybackState = playbackState;
+    playbackState = (await ownerSpotify.getMyCurrentPlaybackState()).body;
+
+    if (!playbackState.is_playing || playbackState.context.uri !==
+        `spotify:playlist:${moshpit.spotify_playlist_id}`) {
+      // If the owner has stopped or left the playlist, end playback
+      await nowPlayingMessage.delete();
+      await Promise.all(listeners.map(async (listener) => {
+        const listenerSpotify = await getSpotify(context, listener);
+        await listenerSpotify.pause();
+      }));
+      // Stop this interval
+      // eslint-disable-next-line no-invalid-this
+      clearInterval(this);
+    } else if (playbackState.item.id !== oldPlaybackState.item.id) {
+      // If the owner has moved on to the next song, update "Now Playing"
+      await nowPlayingMessage.delete();
+      nowPlayingMessage =
+          await reply(`now playing: "${playbackState.item.name}"`);
+    }
+  }, 5000);
 
   await Neo4j.sqlToNeo4j(context);
 }
