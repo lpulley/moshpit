@@ -156,6 +156,34 @@ export async function start(context) {
         trackURIs,
     );
     playlistLength += trackURIs.length;
+
+    // Add the tracks to the database
+    const response = await ownerSpotify.getAudioFeaturesForTracks(trackURIs);
+    const track_features = response.body.audio_features;
+    for (var i = 0; i < trackURIs.length; i++) {
+      const uri = trackURIs[i];
+      const features = track_features[i];
+      const energy = features.energy;
+      const danceability = features.danceability;
+      const instrumentalness = features.instrumentalness;
+      const valence = features.valence
+      await context.postgres.query(`
+        insert into "recommendations" (
+          spotify_uri,
+          energy,
+          danceability,
+          instrumentalness,
+          valence
+        )
+        values (
+          '${uri}',
+          '${energy}',
+          '${danceability}',
+          '${instrumentalness}',
+          '${valence}'
+        )
+      `)
+    }
   }
 
   // Determine the track to start on
