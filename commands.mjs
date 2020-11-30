@@ -130,7 +130,7 @@ export async function start(context) {
     const trackCandidateIDs = (await Promise.all(
         [owner, ...listeners].map(async (user) => {
           const userSpotify = await getSpotify(context, user);
-          const response = await userSpotify.getMyTopTracks({limit: 50});
+          const response = await userSpotify.getMyTopTracks({limit: 10});
           const ids = response.body.items.map((item) => item.id);
           return ids;
         }),
