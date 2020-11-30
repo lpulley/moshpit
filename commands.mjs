@@ -125,27 +125,53 @@ export async function start(context) {
   if (playlistLength < 5) {
     const numNewTracks = 5 - playlistLength;
 
-    // Get each user's top 50 artists' IDs as seed candidates
-    const artistCandidateIDs = (await Promise.all(
+    // Get each user's top 50 tracks' IDs as seed candidates
+    const trackCandidateIDs = (await Promise.all(
         [owner, ...listeners].map(async (user) => {
           const userSpotify = await getSpotify(context, user);
-          const response = await userSpotify.getMyTopArtists({limit: 50});
+          const response = await userSpotify.getMyTopTracks({limit: 50});
           const ids = response.body.items.map((item) => item.id);
           return ids;
         }),
     )).flat();
 
-    // Asynchronously generate track recommendations from the artist candidates
+    // Add the recommended tracks to the database
+    const response = await ownerSpotify.getAudioFeaturesForTracks(
+        trackCandidateIDs.map((trackURI) => trackURI.replace(
+        /^spotify:track:(.+)$/, '$1')););
+    const trackFeatures = response.body.audio_features;
+    for (let i = 0; i < trackURIs.length; i++) {
+      const uri = trackURIs[i];
+      const features = trackFeatures[i];
+      await context.postgres.query(`
+        insert into "Recommendations" (
+          spotify_uri,
+          energy,
+          danceability,
+          instrumentalness,
+          valence
+        )
+        values (
+          '${uri}',
+          '${features.energy}',
+          '${features.danceability}',
+          '${features.instrumentalness}',
+          '${features.valence}'
+        )
+      `);
+    }
+
+    // Asynchronously generate track recommendations from the track candidates
     const trackURIs = await Promise.all(Array(numNewTracks).fill(null).map(
         async () => {
-          // Choose 5 artist IDs from these candidates at random to be the seeds
-          const artistIDs = Array(5).fill(null).map(() => artistCandidateIDs[
-              Math.floor(Math.random() * artistCandidateIDs.length)
+          // Choose 5 track IDs from these candidates at random to be the seeds
+          const trackIDs = Array(5).fill(null).map(() => trackCandidateIDs[
+              Math.floor(Math.random() * trackCandidateIDs.length)
           ]);
 
           // Return a recommended track ID
           return (await ownerSpotify.getRecommendations({
-            seed_artists: artistIDs,
+            seed_tracks: trackIDs,
             limit: 1,
           })).body.tracks[0].uri;
         },
@@ -157,7 +183,6 @@ export async function start(context) {
         trackURIs,
     );
     playlistLength += trackURIs.length;
-    
   }
 
   // Determine the track to start on
