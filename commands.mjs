@@ -134,11 +134,6 @@ export async function start(context) {
         moshpit.moshpit_id,
         moshpit.spotify_playlist_id,
     );
-    // Populate the playlist and update the length
-    await ownerSpotify.addTracksToPlaylist(
-        moshpit.spotify_playlist_id,
-        trackURIs,
-    );
     playlistLength += trackURIs.length;
   }
 
