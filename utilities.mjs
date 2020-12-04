@@ -113,7 +113,7 @@ export async function addTracks(
   // Get each user's top 50 tracks' IDs as seed candidates
   const trackCandidateIDs = (await Promise.all(
       userSpotifys.map(async (spotify) => {
-        const response = await spotify.getMyTopTracks({limit: 50});
+        const response = await spotify.getMyTopTracks({limit: 10});
         const ids = response.body.items.map((item) => item.id);
         return ids;
       }),
